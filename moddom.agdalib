@@ -1,0 +1,3 @@
+name: moddom
+depend: standard-library
+include: src
