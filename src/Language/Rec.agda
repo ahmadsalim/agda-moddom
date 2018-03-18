@@ -68,7 +68,7 @@ data LogicOp (A : Set) : Set where
 mutual
   data Expr {n m : Nat} (G : Ctx n) (D : FunCtx m) : Type -> Set where
     const : Integer -> Expr G D Int
-    var : forall {t} (x : Fin n) {{tc : t ~ lookup x G}} -> Expr G D t
+    $_ : forall {t} (x : Fin n) {{tc : t ~ lookup x G}} -> Expr G D t
     [_]b : BinaryOp (Expr G D Int) -> Expr G D Int
     [_]l : LogicOp (Expr G D Int) -> Expr G D Bool
     if_then_else : forall {t} -> Expr G D Bool -> Expr G D t -> Expr G D t
