@@ -7,6 +7,7 @@ open import Data.Empty renaming (⊥ to Empty; ⊥-elim to magic)
 open import Relation.Binary.PropositionalEquality
 open import Relation.Nullary
 open import Coinduction renaming (♯_ to delay; ∞ to Inf; ♭ to force)
+import Data.Nat as Nat renaming (ℕ to Nat)
 
 record Lattice : Set1 where
   field
@@ -34,6 +35,15 @@ record Lattice : Set1 where
   field
     <=-reflexive : forall a -> a <= a
     is-bot : (a : Carrier) -> Dec (a <= bot)
+
+module Lattices (L : Lattice) where
+  private
+    module L = Lattice L
+
+  -- Not really fix but what can we do when we don't have decidable equality to compute stuff on infinite values
+  fix : (n : Nat.Nat) -> (L.Carrier -> L.Carrier) -> L.Carrier
+  fix Nat.zero f = L.bot
+  fix (Nat.suc n) f = f (fix n f) L.lub fix n f
 
 BoolLat : Lattice
 BoolLat = record
