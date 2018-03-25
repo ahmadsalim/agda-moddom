@@ -1,12 +1,15 @@
+{-# OPTIONS --injective-type-constructors #-}
 module Util where
 
 open import Data.Nat
 open import Data.Fin
 open import Data.Empty
 open import Relation.Nullary
-open import Relation.Binary.PropositionalEquality
+open import Relation.Binary.PropositionalEquality as P
+open import Relation.Binary.HeterogeneousEquality as H
 open import Size
 open import Category.Monad
+open import Data.Vec using (Vec; _++_; _∷_)
 
 weakenF : ∀ {n} → Fin n → Fin (suc n)
 weakenF zero = zero
@@ -16,7 +19,7 @@ strengthenF : ∀ {n} (x : Fin (suc n)) → x ≢ fromℕ n → Fin n
 strengthenF {zero} zero notlast = ⊥-elim (notlast refl)
 strengthenF {zero} (suc ()) notlast
 strengthenF {suc n} zero notlast = zero
-strengthenF {suc n} (suc x) notlast = suc (strengthenF x (λ d → notlast (cong suc d)))
+strengthenF {suc n} (suc x) notlast = suc (strengthenF x (λ d → notlast (P.cong suc d)))
 
 _≟F_ : ∀ {n} (x y : Fin n) → Dec (x ≡ y)
 _≟F_ {zero} () y
@@ -52,3 +55,9 @@ module Delays where
 instance
   delayMonad : forall {i} -> RawMonad (Delay i)
   delayMonad = record { return = now ; _>>=_ = Delays._>>=_ }
+
+::-inj1 : forall {al} {n} {m} {A : Set al} {x y : A} {xs : Vec A n} {ys : Vec A m} -> (x ∷ xs) ≅ (y ∷ ys) -> x ≅ y
+::-inj1 refl = refl
+
+::-inj2 : forall {al} {n} {m} {A : Set al} {x y : A} {xs : Vec A n} {ys : Vec A m} -> (x ∷ xs) ≅ (y ∷ ys) -> xs ≅ ys
+::-inj2 refl = refl

@@ -5,6 +5,7 @@ open import Data.Bool renaming (_∧_ to _and_; _∨_ to _or_)
 open import Data.Product renaming (_×_ to _**_; Σ to Sigma; proj₁ to proj1; proj₂ to proj2)
 open import Data.Sum renaming (_⊎_ to Either; inj₁ to inj1; inj₂ to inj2)
 open import Data.Empty renaming (⊥ to Empty; ⊥-elim to magic)
+open import Data.Integer renaming (ℤ to Integer)
 open import Relation.Binary.PropositionalEquality renaming (_≡_ to _==_)
 open import Relation.Nullary
 import Relation.Nullary.Decidable as Dec renaming (map′ to map')
@@ -123,6 +124,11 @@ instance
 
 data Sign : Set where
   sgnbot sgn+ sgn0 sgn- sgntop : Sign
+
+fromInteger : Integer -> Sign
+fromInteger (+_ Nat.zero) = sgn0
+fromInteger (+_ (Nat.suc n)) = sgn+
+fromInteger (-[1+_] n) = sgn-
 
 data Sign<= : Sign -> Sign -> Set where
   sgnbot-all : forall a -> Sign<= sgnbot a

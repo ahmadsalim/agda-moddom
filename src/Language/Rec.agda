@@ -7,7 +7,7 @@ open import Data.Vec renaming (_∷_ to _::_)
 open import Data.Fin renaming (_+_ to _+F_; _-_ to _-F_; _≤_ to _<=F_; _≤?_ to _<=F?_; fromℕ to fromNat)
 
 open import Relation.Nullary
-open import Relation.Binary.PropositionalEquality renaming (_≡_ to _~_)
+open import Relation.Binary.PropositionalEquality renaming (_≡_ to _==_)
 
 open import Util renaming (_≟F_ to _~F?_)
 
@@ -37,15 +37,15 @@ shiftType x (t1 *t t2) = shiftType x t1 *t shiftType x t2
 shiftType x (t1 +t t2) = shiftType x t1 +t shiftType x t2
 shiftType x (Rec t) = Rec (shiftType (suc x) t)
 
-substType : forall {n} -> Type' (suc n) -> Type' n -> Type' n
-substType Int t' = Int
-substType Bool t' = Bool
-substType {n} (Var x) t' with (x ~F? (fromNat n))
-substType {n} (Var x) t' | yes _ = t'
-substType {n} (Var x) t' | no contra = Var (strengthenF x contra)
-substType (t1 *t t2) t' = substType t1 t' *t substType t2 t'
-substType (t1 +t t2) t' = substType t1 t' +t substType t2 t'
-substType (Rec t) t' = Rec (substType t (shiftType zero t'))
+_<_> : forall {n} -> Type' (suc n) -> Type' n -> Type' n
+Int < t' > = Int
+Bool < t' > = Bool
+_<_> {n} (Var x) t' with (x ~F? (fromNat n))
+_<_> {n} (Var x) t' | yes _ = t'
+_<_> {n} (Var x) t' | no contra = Var (strengthenF x contra)
+(t1 *t t2) < t' > = t1 < t' > *t t2 < t' >
+(t1 +t t2) < t' > = t1 < t' > +t t2 < t' >
+(Rec t) < t' > = Rec (t < shiftType zero t' >)
 
 record FunType : Set where
   field
@@ -63,24 +63,24 @@ data BinaryOp (A : Set) : Set where
   _+_ _-_ _*_ : A -> A -> BinaryOp A
 
 data LogicOp (A : Set) : Set where
-  _<=_ _==_ : A -> A -> LogicOp A
+  _<=_ _~_ : A -> A -> LogicOp A
 
 mutual
   data Expr {n m : Nat} (G : Ctx n) (D : FunCtx m) : Type -> Set where
     const : Integer -> Expr G D Int
-    $_ : forall {t} (x : Fin n) {{tc : t ~ lookup x G}} -> Expr G D t
+    $_ : forall {t} (x : Fin n) {{tc : t == lookup x G}} -> Expr G D t
     [_]b : BinaryOp (Expr G D Int) -> Expr G D Int
     [_]l : LogicOp (Expr G D Int) -> Expr G D Bool
-    if_then_else : forall {t} -> Expr G D Bool -> Expr G D t -> Expr G D t
-    <_> : forall {ft} (f : Fin m) {{ftc : ft ~ lookup f D}} -> Exprs G D (argtys ft) -> Expr G D (returnty ft)
+    if_then_else_ : forall {t} -> Expr G D Bool -> Expr G D t -> Expr G D t -> Expr G D t
+    _!_ : forall {ft} (f : Fin m) {{ftc : ft == lookup f D}} -> Exprs G D (argtys ft) -> Expr G D (returnty ft)
     _,_ : forall {t1 t2} -> Expr G D t1 -> Expr G D t2 -> Expr G D (t1 *t t2)
     fst : forall {t1 t2} -> Expr G D (t1 *t t2) -> Expr G D t1
     snd : forall {t1 t2} -> Expr G D (t1 *t t2) -> Expr G D t2
     inl : forall {t1 t2} -> Expr G D t1 -> Expr G D (t1 +t t2)
     inr : forall {t1 t2} -> Expr G D t2 -> Expr G D (t1 +t t2)
     case_of_or_ : forall {t1 t2 tr} -> Expr G D (t1 +t t2) -> Expr (t1 :: G) D tr -> Expr (t2 :: G) D tr -> Expr G D tr
-    abs : forall {tx tr} {{tc : tr ~ substType tx (Rec tx)}} -> Expr G D tr -> Expr G D (Rec tx)
-    rep : forall {tx tr} {{tc : tr ~ substType tx (Rec tx)}} -> Expr G D (Rec tx) -> Expr G D tr
+    abs : forall {tx tr} {{tc : tr == tx < Rec tx >}} -> Expr G D tr -> Expr G D (Rec tx)
+    rep : forall {tx tr} {{tc : tr == tx < Rec tx >}} -> Expr G D (Rec tx) -> Expr G D tr
 
   data Exprs {n m : Nat} (G : Ctx n) (D : FunCtx m) : List Type -> Set where
     [] : Exprs G D []
