@@ -6,7 +6,7 @@ open import Data.Product renaming (_×_ to _**_; Σ to Sigma; proj₁ to proj1; 
 open import Data.Sum renaming (_⊎_ to Either; inj₁ to inj1; inj₂ to inj2)
 open import Data.Empty renaming (⊥ to Empty; ⊥-elim to magic)
 open import Data.Integer renaming (ℤ to Integer)
-open import Relation.Binary.PropositionalEquality renaming (_≡_ to _==_)
+open import Relation.Binary.PropositionalEquality as P renaming (_≡_ to _==_)
 open import Relation.Nullary
 import Relation.Nullary.Decidable as Dec renaming (map′ to map')
 open import Category.Monad
@@ -14,6 +14,8 @@ open import Coinduction renaming (♯_ to delay; ∞ to Inf; ♭ to force)
 import Data.Nat as Nat renaming (ℕ to Nat)
 import Level renaming (_⊔_ to _lub_)
 open import Category.Functor
+open import Function.Equality renaming (_⟨$⟩_ to _<$>_)
+open import Function.Equivalence renaming (_⇔_ to Equiv)
 
 open import Util
 
@@ -88,10 +90,10 @@ instance
                         f-is-bot true Tfx rewrite eq = Tfx
                 Bool-is-bot f | false | [ eq ] | true | [ eq2 ] = no f-is-not-bot
                   where f-is-not-bot : ((x : Bool) -> T (f x) -> Empty) -> Empty
-                        f-is-not-bot f-is-bot = f-is-bot false (subst (\ x -> T x) (sym eq2) tt)
+                        f-is-not-bot f-is-bot = f-is-bot false (subst (\ x -> T x) (P.sym eq2) tt)
                 Bool-is-bot f | true | [ eq ] = no f-is-not-bot
                   where f-is-not-bot : ((x : Bool) -> T (f x) -> Empty) -> Empty
-                        f-is-not-bot f-is-bot = f-is-bot true (subst (\ x -> T x) (sym eq) tt)
+                        f-is-not-bot f-is-bot = f-is-bot true (subst (\ x -> T x) (P.sym eq) tt)
 
   BoolDecLat : IsDecLattice (Bool -> Bool)
   BoolDecLat = record { _<=?_ = Bool<=? }
@@ -104,19 +106,19 @@ instance
                   f<=g false rewrite eq3 = \ ()
                   f<=g true rewrite eq = \ ()
           Bool<=? f g | false | [ eq ] | q | [ eq2 ] | true | [ eq3 ] | false | [ eq4 ] =
-            no (\ f<=g -> subst (λ x → T x) eq4 (f<=g false (subst (\ x -> T x) (sym eq3) tt)))
+            no (\ f<=g -> subst (λ x → T x) eq4 (f<=g false (subst (\ x -> T x) (P.sym eq3) tt)))
           Bool<=? f g | false | [ eq ] | q | [ eq2 ] | true | [ eq3 ] | true | [ eq4 ] = yes f<=g
             where f<=g : (x : Bool) -> T (f x) -> T (g x)
                   f<=g false rewrite eq3 | eq4 = \ x -> x
                   f<=g true rewrite eq = \ ()
-          Bool<=? f g | true | [ eq ] | false | [ eq2 ] = no (\ f<=g -> subst (\ x -> T x) eq2 (f<=g true (subst (\ x -> T x) (sym eq) tt)))
+          Bool<=? f g | true | [ eq ] | false | [ eq2 ] = no (\ f<=g -> subst (\ x -> T x) eq2 (f<=g true (subst (\ x -> T x) (P.sym eq) tt)))
           Bool<=? f g | true | [ eq ] | true | [ eq2 ] with f false | inspect f false | g false | inspect g false
           Bool<=? f g | true | [ eq ] | true | [ eq2 ] | false | [ eq3 ] | q | [ eq4 ] = yes f<=g
             where f<=g : (x : Bool) -> T (f x) -> T (g x)
                   f<=g false rewrite eq3 = \ ()
                   f<=g true rewrite eq | eq2 = \ x -> x
           Bool<=? f g | true | [ eq ] | true | [ eq2 ] | true | [ eq3 ] | false | [ eq4 ] =
-             no (\ f<=g -> subst (\ x -> T x) eq4 (f<=g false (subst (\ x -> T x) (sym eq3) tt)))
+             no (\ f<=g -> subst (\ x -> T x) eq4 (f<=g false (subst (\ x -> T x) (P.sym eq3) tt)))
           Bool<=? f g | true | [ eq ] | true | [ eq2 ] | true | [ eq3 ] | true | [ eq4 ] = yes f<=g
             where f<=g : (x : Bool) -> T (f x) -> T (g x)
                   f<=g false rewrite eq3 | eq4 = \ x -> x
@@ -225,6 +227,121 @@ instance
           Sign<=? sgntop sgn0 = no (\ ())
           Sign<=? sgntop sgn- = no (\ ())
           Sign<=? sgntop sgntop = yes (sgntop-all sgntop)
+
+Sign-leq : Sign -> Sign -> (Bool -> Bool)
+Sign-leq sgnbot y = \ _ -> false
+Sign-leq sgn+ sgnbot = \ _ -> false
+Sign-leq sgn+ sgn+ = \ _ -> true
+Sign-leq sgn+ sgn0 = \ { true -> false ;  false -> true }
+Sign-leq sgn+ sgn- = \ { true -> false ; false -> true }
+Sign-leq sgn+ sgntop = \ _ -> true
+Sign-leq sgn0 sgnbot = \ _ -> false
+Sign-leq sgn0 sgn+ = \ { true -> true ; false -> false }
+Sign-leq sgn0 sgn0 = \ { true -> true ; false -> false }
+Sign-leq sgn0 sgn- = \ { true -> false ; false -> true }
+Sign-leq sgn0 sgntop = \ _ -> true
+Sign-leq sgn- sgnbot = \ _ -> false
+Sign-leq sgn- sgn+ = \ {true -> true ; false -> false}
+Sign-leq sgn- sgn0 = \ { true -> true ; false -> false }
+Sign-leq sgn- sgn- = \ _ -> true
+Sign-leq sgn- sgntop = \ _ -> true
+Sign-leq sgntop sgnbot = \ _ -> false
+Sign-leq sgntop sgn+ = \ _ -> true
+Sign-leq sgntop sgn0 = \ _ -> true
+Sign-leq sgntop sgn- = \ _ -> true
+Sign-leq sgntop sgntop = \ _ -> true
+
+Sign-eq : Sign -> Sign -> (Bool -> Bool)
+Sign-eq sgnbot y = \ _ -> false
+Sign-eq sgn+ sgnbot = \ _ -> false
+Sign-eq sgn+ sgn+ = \ _ -> true
+Sign-eq sgn+ sgn0 = \ { true -> false ; false -> true }
+Sign-eq sgn+ sgn- = \ { true -> false ; false -> true }
+Sign-eq sgn+ sgntop = \ _ -> true
+Sign-eq sgn0 sgnbot = \ _ -> false
+Sign-eq sgn0 sgn+ = \ { true -> false ; false -> true }
+Sign-eq sgn0 sgn0 = \ { true -> true ; false -> false }
+Sign-eq sgn0 sgn- = \ { true -> false ; false -> true }
+Sign-eq sgn0 sgntop = \ _ -> true
+Sign-eq sgn- sgnbot = \ _ -> false
+Sign-eq sgn- sgn+ = \ { true -> false ; false -> true}
+Sign-eq sgn- sgn0 = \ { true -> false ; false -> true }
+Sign-eq sgn- sgn- = \ _ -> true
+Sign-eq sgn- sgntop = \ _ -> true
+Sign-eq sgntop sgnbot = \ _ -> false
+Sign-eq sgntop sgn+ = \ _ -> true
+Sign-eq sgntop sgn0 = \ _ -> true
+Sign-eq sgntop sgn- = \ _ -> true
+Sign-eq sgntop sgntop = \ _ -> true
+
+Sign-plus : Sign -> Sign -> Sign
+Sign-plus sgnbot y = sgnbot
+Sign-plus sgn+ sgnbot = sgnbot
+Sign-plus sgn+ sgn+ = sgn+
+Sign-plus sgn+ sgn0 = sgn+
+Sign-plus sgn+ sgn- = sgntop
+Sign-plus sgn+ sgntop = sgntop
+Sign-plus sgn0 sgnbot = sgnbot
+Sign-plus sgn0 sgn+ = sgn+
+Sign-plus sgn0 sgn0 = sgn0
+Sign-plus sgn0 sgn- = sgn-
+Sign-plus sgn0 sgntop = sgntop
+Sign-plus sgn- sgnbot = sgnbot
+Sign-plus sgn- sgn+ = sgntop
+Sign-plus sgn- sgn0 = sgn-
+Sign-plus sgn- sgn- = sgn-
+Sign-plus sgn- sgntop = sgntop
+Sign-plus sgntop sgnbot = sgnbot
+Sign-plus sgntop sgn+ = sgntop
+Sign-plus sgntop sgn0 = sgntop
+Sign-plus sgntop sgn- = sgntop
+Sign-plus sgntop sgntop = sgntop
+
+Sign-minus : Sign -> Sign -> Sign
+Sign-minus sgnbot y = sgnbot
+Sign-minus sgn+ sgnbot = sgnbot
+Sign-minus sgn+ sgn+ = sgntop
+Sign-minus sgn+ sgn0 = sgn+
+Sign-minus sgn+ sgn- = sgn+
+Sign-minus sgn+ sgntop = sgntop
+Sign-minus sgn0 sgnbot = sgnbot
+Sign-minus sgn0 sgn+ = sgn-
+Sign-minus sgn0 sgn0 = sgn0
+Sign-minus sgn0 sgn- = sgn+
+Sign-minus sgn0 sgntop = sgntop
+Sign-minus sgn- sgnbot = sgnbot
+Sign-minus sgn- sgn+ = sgn-
+Sign-minus sgn- sgn0 = sgn-
+Sign-minus sgn- sgn- = sgntop
+Sign-minus sgn- sgntop = sgntop
+Sign-minus sgntop sgnbot = sgnbot
+Sign-minus sgntop sgn+ = sgntop
+Sign-minus sgntop sgn0 = sgntop
+Sign-minus sgntop sgn- = sgntop
+Sign-minus sgntop sgntop = sgntop
+
+Sign-mult : Sign -> Sign -> Sign
+Sign-mult sgnbot y = sgnbot
+Sign-mult sgn+ sgnbot = sgnbot
+Sign-mult sgn+ sgn+ = sgn+
+Sign-mult sgn+ sgn0 = sgn0
+Sign-mult sgn+ sgn- = sgn-
+Sign-mult sgn+ sgntop = sgntop
+Sign-mult sgn0 sgnbot = sgnbot
+Sign-mult sgn0 sgn+ = sgn0
+Sign-mult sgn0 sgn0 = sgn0
+Sign-mult sgn0 sgn- = sgn0
+Sign-mult sgn0 sgntop = sgn0
+Sign-mult sgn- sgnbot = sgnbot
+Sign-mult sgn- sgn+ = sgn-
+Sign-mult sgn- sgn0 = sgn0
+Sign-mult sgn- sgn- = sgn+
+Sign-mult sgn- sgntop = sgntop
+Sign-mult sgntop sgnbot = sgnbot
+Sign-mult sgntop sgn+ = sgntop
+Sign-mult sgntop sgn0 = sgn0
+Sign-mult sgntop sgn- = sgntop
+Sign-mult sgntop sgntop = sgntop
 
 instance
   ProdFunctor1 : forall {al bl} {A : Set al} -> RawFunctor {al Level.lub bl} (A **_)
@@ -366,17 +483,17 @@ module _ {al} {bl} {A : Set al} {B : Set bl} {{LA : IsLattice A}} {{LB : IsLatti
 
 {-# NO_POSITIVITY_CHECK #-}
 data Fix# {fl} (F# : Set fl -> Set fl) : Nat.Nat -> Set fl where
-  in-top : Fix# F# Nat.zero
+  in-bot : Fix# F# Nat.zero
   in-f# : forall {n} -> F# (Fix# F# n) -> Fix# F# (Nat.suc n)
 
 instance
   Fix#-Lat : forall {fl n} {F# : Set fl -> Set fl} {{LF# : forall {X#} -> IsLattice X# -> IsLattice (F# X#)}} -> IsLattice (Fix# F# n)
   Fix#-Lat {fl} {Nat.zero} {F#} {{LF#}} = record
                                         { _<=_ = \ _ _ -> Unit
-                                        ; _glb_ = \ _ _ -> in-top
-                                        ; _lub_ = \ _ _ -> in-top
-                                        ; bot = in-top
-                                        ; top = in-top
+                                        ; _glb_ = \ _ _ -> in-bot
+                                        ; _lub_ = \ _ _ -> in-bot
+                                        ; bot = in-bot
+                                        ; top = in-bot
                                         ; <=-reflexive = \ _ -> tt
                                         ; is-bot = \ _ -> yes tt
                                         }
@@ -407,3 +524,10 @@ instance
   Fix#-DecLat {fl} {Nat.suc n} {F#} {{LF#}} {{DF#}} = record
                                                             { _<=?_ = \ { (in-f# f#1) (in-f# f#2) -> f#1 DF#.<=? f#2 } }
     where module DF# = IsDecLattice (DF# (Fix#-DecLat {n = n} {F# = F#} {{LF#}} {{DF#}}))
+
+FixEquiv : forall {fl} {n} {F# : Set fl -> Set fl}
+                  {{RF : RawFunctor F#}} {{LF# : forall {X#} -> IsLattice X# -> IsLattice (F# X#)}} -> Equiv (Fix# F# n) (Fix# F# (Nat.suc n))
+FixEquiv {fl} {Nat.zero} {F#} {{RF}} {{LF#}} = equivalence (\ { in-bot -> IsLattice.bot (Fix#-Lat {{LF#}}) }) (\ _ → in-bot)
+FixEquiv {fl} {Nat.suc n} {F#} {{RF}} {{LF#}} =
+  equivalence (\ { (in-f# x) -> in-f# (RawFunctor._<$>_ RF (\ y -> Equivalence.to (FixEquiv {{RF}} {{LF#}}) <$> y) x) })
+              (\ { (in-f# x) -> in-f# (RawFunctor._<$>_ RF (\ y -> Equivalence.from (FixEquiv {{RF}} {{LF#}}) <$> y) x) })

@@ -61,3 +61,7 @@ instance
 
 ::-inj2 : forall {al} {n} {m} {A : Set al} {x y : A} {xs : Vec A n} {ys : Vec A m} -> (x ∷ xs) ≅ (y ∷ ys) -> xs ≅ ys
 ::-inj2 refl = refl
+
+take : forall {al} {A : Set al} n {m} -> Vec A (n Data.Nat.+ m) -> Vec A n
+take zero xs = Vec.[]
+take (suc n) (x ∷ xs) = x ∷ take n xs
