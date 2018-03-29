@@ -4,21 +4,21 @@ module Language.Semantics where
 open import Data.Integer renaming (ℤ to Integer; _+_ to _+Z_; _*_ to _*Z_; _-_ to _-Z_; suc to isuc;
                                    _≤?_ to _<=?Z_; _≟_ to _~?Z_)
 open import Data.Nat renaming (ℕ to Nat)
+open import Data.Fin
 open import Data.Unit renaming (⊤ to Unit)
 open import Data.Bool as B2 renaming (Bool to B2)
 open import Data.Empty renaming (⊥ to Empty; ⊥-elim to magic)
 open import Data.Sum renaming (_⊎_ to Either; inj₁ to inj1; inj₂ to inj2)
 open import Data.Product renaming (_×_ to _**_; Σ to Sigma; proj₁ to proj1; proj₂ to proj2)
 open import Data.Vec as Vec renaming (_∷_ to _::_)
-open import Data.Vec.Properties
+open import Data.Vec.All as VA renaming (_∷_ to _::_)
 open import Relation.Nullary.Decidable as Dec renaming (⌊_⌋ to toBool)
 open import Relation.Nullary
 open import Relation.Binary.HeterogeneousEquality as P renaming (_≅_ to _=~=_; ≡-to-≅ to ==-to-=~=)
-open import Relation.Binary.PropositionalEquality using (refl) renaming (_≡_ to _==_)
+import Relation.Binary.PropositionalEquality as PE
 open import Function as F renaming (_∋_ to the)
 open import Function.Equality renaming (_⟨$⟩_ to _<$>_)
 open import Function.Equivalence as E renaming (_⇔_ to Equiv; _∘_ to _o_)
-open import Category.Functor as Functor
 import Level
 
 open import Domains.Concrete
@@ -43,16 +43,16 @@ record SemanticOps : Set1 where
     P-fst : forall {t s} ->  [[ t *t s ]]t -> [[ t ]]t
     P-snd : forall {t s} -> [[ t *t s ]]t -> [[ s ]]t
 
-    S-left : forall {t s} -> [[ t ]]t -> [[ t +t s ]]t
-    S-right : forall {t s} -> [[ s ]]t -> [[ t +t s ]]t
-    S-case : forall {t s w} -> [[ t +t s ]]t -> ([[ t ]]t -> [[ w ]]t)
+    E-left : forall {t s} -> [[ t ]]t -> [[ t +t s ]]t
+    E-right : forall {t s} -> [[ s ]]t -> [[ t +t s ]]t
+    E-case : forall {t s w} -> [[ t +t s ]]t -> ([[ t ]]t -> [[ w ]]t)
                                              -> ([[ s ]]t -> [[ w ]]t)
                                              -> [[ w ]]t
 
     S-abs : forall {t} -> [[ t < Rec t > ]]t -> [[ Rec t ]]t
     S-rep : forall {t} -> [[ Rec t ]]t -> [[ t < Rec t > ]]t
 
-module Concrete where
+module ConcreteOps where
   open Equivalence
 
   [[_]]t' : Type' opn -> Set -> Set
@@ -101,9 +101,9 @@ module Concrete where
                           ; P-pair = _,_
                           ; P-fst = proj1
                           ; P-snd = proj2
-                          ; S-left = inj1
-                          ; S-right = inj2
-                          ; S-case =
+                          ; E-left = inj1
+                          ; E-right = inj2
+                          ; E-case =
                              \ v c1 c2 ->
                                case v of \ {
                                   (inj1 x) -> c1 x;
@@ -113,7 +113,7 @@ module Concrete where
                           ; S-rep = \ {t} x -> from (SynSemSub t (Rec t)) <$> Fix.out-f x
                           }
 
-module Abstract (depth : Nat) where
+module AbstractOps (depth : Nat) where
   open Equivalence
 
   [[_]]t' : Type' opn -> Set -> Set
@@ -204,9 +204,9 @@ module Abstract (depth : Nat) where
                           ; P-pair = \ {t} {s} v1 v2 -> _,,_ {{TypeLattice {t}}} {{TypeLattice {s}}} v1 v2
                           ; P-fst = \ {t} {s} v -> Abs.fst {{TypeLattice {t}}} {{TypeLattice {s}}} v
                           ; P-snd = \ {t} {s} v -> Abs.snd {{TypeLattice {t}}} {{TypeLattice {s}}} v
-                          ; S-left =  \ {t} {s} v -> v , IsLattice.bot (TypeLattice {s})
-                          ; S-right = \ {t} {s} v -> IsLattice.bot (TypeLattice {t}) , v
-                          ; S-case = \ { {t} {s} {w} (tv , sv) tf sf ->
+                          ; E-left =  \ {t} {s} v -> v , IsLattice.bot (TypeLattice {s})
+                          ; E-right = \ {t} {s} v -> IsLattice.bot (TypeLattice {t}) , v
+                          ; E-case = \ { {t} {s} {w} (tv , sv) tf sf ->
                                     let open IsLattice (TypeLattice {w})
                                     in (B2.if (toBool (IsLattice.is-bot (TypeLattice {t}) tv)) then bot else tf tv) lub
                                        (B2.if (toBool (IsLattice.is-bot (TypeLattice {s}) sv)) then bot else sf sv)  }
@@ -229,3 +229,52 @@ module Abstract (depth : Nat) where
           repv {t} (in-f# x) = from (SynSemSub t (Rec t)) <$>
                                  tmap {{Fix#-Lat {{TypeLattice' {t}}}}} {{Fix#-Lat {{TypeLattice' {t}}}}} t
                                       (to (FixEquiv {{TypeLattice' {t}}} (\ {A} {B} {{LA}} {{LB}} -> tmap {A} {B} {{LA}} {{LB}} t)) <$>_) x
+
+module Semantics (Ops : SemanticOps) where
+  open SemanticOps Ops
+  open FunType
+
+  [[_]]G : forall {n} (G : Ctx n) -> Set
+  [[ G ]]G = VA.All [[_]]t G
+
+  [[_]]ft : FunType -> Set
+  [[ ft ]]ft = VA.All [[_]]t (fromList (argtys ft)) -> [[ returnty ft ]]t
+
+  [[_]]D : forall {m} (D : FunCtx m) -> Set
+  [[ D ]]D = VA.All [[_]]ft D
+
+  mutual
+    [[_]]e : forall {n} {m} {G : Ctx n} {D : FunCtx m} {t} (e : Expr G D t) -> [[ G ]]G -> [[ D ]]D -> [[ t ]]t
+    [[ Expr.const x ]]e g d = I-num x
+    [[ ($ x) {{PE.refl}} ]]e g d = VA.lookup x g
+    [[ [ x + y ]b ]]e g d = [[ x ]]e g d +I [[ y ]]e g d
+    [[ [ x - y ]b ]]e g d = [[ x ]]e g d -I [[ y ]]e g d
+    [[ [ x * y ]b ]]e g d = [[ x ]]e g d *I [[ y ]]e g d
+    [[ [ x <= y ]l ]]e g d = [[ x ]]e g d <=I [[ y ]]e g d
+    [[ [ x ~ y ]l ]]e g d = [[ x ]]e g d ~I [[ y ]]e g d
+    [[ if e then et else ef ]]e g d = B-if ([[ e ]]e g d)
+                                          ([[ et ]]e g d)
+                                          ([[ ef ]]e g d)
+    [[ _!_ f {{PE.refl}} es ]]e g d = VA.lookup f d ([[ es ]]es g d)
+    [[ e1 , e2 ]]e g d = P-pair ([[ e1 ]]e g d) ([[ e2 ]]e g d)
+    [[ Expr.fst e ]]e g d = P-fst ([[ e ]]e g d)
+    [[ Expr.snd e ]]e g d = P-snd ([[ e ]]e g d)
+    [[ inl e ]]e g d = E-left ([[ e ]]e g d)
+    [[ inr e ]]e g d = E-right ([[ e ]]e g d)
+    [[ case e of el or er ]]e g d = E-case ([[ e ]]e g d)
+                                          (\ vl -> [[ el ]]e (vl :: g) d)
+                                          (\ vr -> [[ er ]]e (vr :: g) d)
+    [[ abs {{PE.refl}} e ]]e g d = S-abs ([[ e ]]e g d)
+    [[ rep {{PE.refl}} e ]]e g d = S-rep ([[ e ]]e g d)
+
+    [[_]]es : forall {n} {m} {G : Ctx n} {D : FunCtx m} {ts}
+             (es : Exprs G D ts) -> [[ G ]]G -> [[ D ]]D -> VA.All [[_]]t (fromList ts)
+    [[ [] ]]es g d = []
+    [[ e :: es ]]es g d = [[ e ]]e g d :: [[ es ]]es g d
+
+    [[_]]p : forall {m} {D : FunCtx m} {k} {D2 : FunCtx k} -> ProgDef D D2 -> [[ D ]]D -> [[ D2 ]]D
+    [[ [] ]]p d = []
+    [[ fd :: fds ]]p d = (\ avs -> [[ fd ]]e avs d) :: [[ fds ]]p d
+
+    [[_]] : forall {m} {D : FunCtx m} -> Prog D -> [[ D ]]D -> [[ D ]]D
+    [[ P ]] = [[ P ]]p

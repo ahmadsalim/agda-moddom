@@ -71,3 +71,10 @@ mutual
   data Exprs {n m : Nat} (G : Ctx n) (D : FunCtx m) : List Type -> Set where
     [] : Exprs G D []
     _::_ : forall {t ts} -> Expr G D t -> Exprs G D ts -> Exprs G D (t :: ts)
+
+  data ProgDef {m} (D : FunCtx m) : {n : Nat} -> FunCtx n -> Set where
+    [] : ProgDef D []
+    _::_ : forall {n} {ft} {fts : FunCtx n} -> Expr (fromList (argtys ft)) D (returnty ft) -> ProgDef D fts -> ProgDef D (ft :: fts)
+
+  Prog : {n : Nat} -> FunCtx n -> Set
+  Prog D = ProgDef D D
