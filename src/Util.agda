@@ -4,6 +4,7 @@ module Util where
 open import Data.Nat
 open import Data.Fin
 open import Data.Empty
+open import Data.Product
 open import Relation.Nullary
 open import Relation.Binary.PropositionalEquality as P
 open import Relation.Binary.HeterogeneousEquality as H
@@ -62,6 +63,14 @@ instance
 ::-inj2 : forall {al} {n} {m} {A : Set al} {x y : A} {xs : Vec A n} {ys : Vec A m} -> (x ∷ xs) ≅ (y ∷ ys) -> xs ≅ ys
 ::-inj2 refl = refl
 
+map-proj1-snoc : forall {al bl} {A : Set al} {B : A -> Set bl} {n} {a : A} {b : B a} (xs : Vec (Σ A B) n) -> Data.Vec.map proj₁ (xs ++ Data.Vec.[ a , b ]) ≅ Data.Vec.map proj₁ xs ++ Data.Vec.[ a ]
+map-proj1-snoc Vec.[] = refl
+map-proj1-snoc ((a1 , b1) ∷ xs) = H.cong (a1 ∷_) (map-proj1-snoc xs)
+
 take : forall {al} {A : Set al} n {m} -> Vec A (n Data.Nat.+ m) -> Vec A n
 take zero xs = Vec.[]
 take (suc n) (x ∷ xs) = x ∷ take n xs
+
+replace : forall {al} {A : Set al} {n} (f : Fin n) (a : A) -> Vec A n -> Vec A n
+replace zero a (x ∷ xs) = a ∷ xs
+replace (suc f) a (x ∷ xs) = x ∷ replace f a xs

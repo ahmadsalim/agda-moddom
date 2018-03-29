@@ -525,9 +525,13 @@ instance
                                                             { _<=?_ = \ { (in-f# f#1) (in-f# f#2) -> f#1 DF#.<=? f#2 } }
     where module DF# = IsDecLattice (DF# (Fix#-DecLat {n = n} {F# = F#} {{LF#}} {{DF#}}))
 
-FixEquiv : forall {fl} {n} {F# : Set fl -> Set fl}
-                  {{RF : RawFunctor F#}} {{LF# : forall {X#} -> IsLattice X# -> IsLattice (F# X#)}} -> Equiv (Fix# F# n) (Fix# F# (Nat.suc n))
-FixEquiv {fl} {Nat.zero} {F#} {{RF}} {{LF#}} = equivalence (\ { in-bot -> IsLattice.bot (Fix#-Lat {{LF#}}) }) (\ _ → in-bot)
-FixEquiv {fl} {Nat.suc n} {F#} {{RF}} {{LF#}} =
-  equivalence (\ { (in-f# x) -> in-f# (RawFunctor._<$>_ RF (\ y -> Equivalence.to (FixEquiv {{RF}} {{LF#}}) <$> y) x) })
-              (\ { (in-f# x) -> in-f# (RawFunctor._<$>_ RF (\ y -> Equivalence.from (FixEquiv {{RF}} {{LF#}}) <$> y) x) })
+FixEquiv : forall {fl} {n} {F# : Set fl -> Set fl} {{LF# : forall {X#} -> IsLattice X# -> IsLattice (F# X#)}}
+          (fmap : forall {A : Set fl} {B : Set fl} {{LA : IsLattice A}} {{LB : IsLattice B}} (f : A -> B) -> F# A -> F# B)
+          -> Equiv (Fix# F# n) (Fix# F# (Nat.suc n))
+FixEquiv {fl} {Nat.zero} {F#} {{LF#}} fmap = equivalence (\ { in-bot -> IsLattice.bot (Fix#-Lat {{LF#}}) }) (\ _ → in-bot)
+FixEquiv {fl} {Nat.suc n} {F#} {{LF#}} fmap =
+  equivalence (\ { (in-f# x) -> in-f# (fmap (\ y -> to (FixEquiv {{LF#}} fmap) <$> y) x) })
+              (\ { (in-f# x) -> in-f# (fmap (\ y -> from (FixEquiv {{LF#}} fmap) <$> y) x) })
+  where instance flat : forall {n} -> IsLattice (Fix# F# n)
+                 flat = Fix#-Lat {{LF#}}
+        open Equivalence

@@ -1,13 +1,12 @@
 module Language.Semantics where
 
+
 open import Data.Integer renaming (ℤ to Integer; _+_ to _+Z_; _*_ to _*Z_; _-_ to _-Z_; suc to isuc;
                                    _≤?_ to _<=?Z_; _≟_ to _~?Z_)
+open import Data.Nat renaming (ℕ to Nat)
 open import Data.Unit renaming (⊤ to Unit)
 open import Data.Bool as B2 renaming (Bool to B2)
 open import Data.Empty renaming (⊥ to Empty; ⊥-elim to magic)
-open import Data.Nat renaming (ℕ to Nat; _+_ to _+N_; _*_ to _*N_)
-open import Data.Nat.Properties.Simple
-open import Data.Fin renaming (_+_ to _+F_; _-_ to _-F_; _≤_ to _<=F_; _≤?_ to _<=F?_; fromℕ to fromNat)
 open import Data.Sum renaming (_⊎_ to Either; inj₁ to inj1; inj₂ to inj2)
 open import Data.Product renaming (_×_ to _**_; Σ to Sigma; proj₁ to proj1; proj₂ to proj2)
 open import Data.Vec as Vec renaming (_∷_ to _::_)
@@ -15,10 +14,10 @@ open import Data.Vec.Properties
 open import Relation.Nullary.Decidable as Dec renaming (⌊_⌋ to toBool)
 open import Relation.Nullary
 open import Relation.Binary.HeterogeneousEquality as P renaming (_≅_ to _=~=_; ≡-to-≅ to ==-to-=~=)
-open import Relation.Binary.PropositionalEquality using (refl)
+open import Relation.Binary.PropositionalEquality using (refl) renaming (_≡_ to _==_)
 open import Function as F renaming (_∋_ to the)
 open import Function.Equality renaming (_⟨$⟩_ to _<$>_)
-open import Function.Equivalence renaming (_⇔_ to Equiv)
+open import Function.Equivalence as E renaming (_⇔_ to Equiv; _∘_ to _o_)
 open import Category.Functor as Functor
 import Level
 
@@ -29,10 +28,7 @@ open import Util renaming (_≟F_ to _~F?_)
 
 record SemanticOps : Set1 where
   field
-    [[_]]t' : forall {n} -> Type' n -> Vec Set n -> Set
-
-  [[_]]t : Type -> Set
-  [[_]]t t = [[ t ]]t' []
+    [[_]]t : Type -> Set
 
   field
     I-num : Integer -> [[ Int ]]t
@@ -56,17 +52,22 @@ record SemanticOps : Set1 where
     S-abs : forall {t} -> [[ t < Rec t > ]]t -> [[ Rec t ]]t
     S-rep : forall {t} -> [[ Rec t ]]t -> [[ t < Rec t > ]]t
 
-postulate
-  believe-me : forall {a} {A : Set a} -> A
-
 module Concrete where
-  [[_]]t' : forall {n} -> Type' n -> Vec Set n -> Set
-  [[ Int ]]t' As = Integer
-  [[ Bool ]]t' As = B2
-  [[ Var x ]]t' As = lookup x As
-  [[ t *t s ]]t' As = ([[ t ]]t' As) ** ([[ s ]]t' As)
-  [[ t +t s ]]t' As = Either ([[ t ]]t' As) ([[ s ]]t' As)
-  [[_]]t' {n} (Rec t) As = Fix (\ B -> [[ t ]]t' (B :: As))
+  open Equivalence
+
+  [[_]]t' : Type' opn -> Set -> Set
+  [[ Int ]]t' A = Integer
+  [[ Bool ]]t' A = B2
+  [[ Var ]]t' A = A
+  [[ t *t s ]]t' A = ([[ t ]]t' A) ** ([[ s ]]t' A)
+  [[ t +t s ]]t' A = Either ([[ t ]]t' A) ([[ s ]]t' A)
+
+  [[_]]t : Type' cls -> Set
+  [[ Int ]]t = Integer
+  [[ Bool ]]t = B2
+  [[ t *t s ]]t = [[ t ]]t ** [[ s ]]t
+  [[ t +t s ]]t = Either [[ t ]]t [[ s ]]t
+  [[ Rec t ]]t = Fix [[ t ]]t'
 
   mutual
     fix : forall {i} {A} (f : A -> A) -> Delay i A
@@ -75,39 +76,19 @@ module Concrete where
     fix' : forall {i} {A} (f : A -> A) -> InfDelay i A
     InfDelay.force (fix' f) = fix f
 
-  SynSemSub : forall {n As} {Cs : Vec Set (suc n)} (t : Type' (suc n)) (t' : Type' n)
-   (CsAs : Cs =~= As ++ Vec.[ [[ t' ]]t' As ])
-   -> Equiv ([[ t < t' > ]]t' As) ([[ t ]]t' Cs)
-  SynSemSub {n} {As} Int t' CsAs = equivalence F.id F.id
-  SynSemSub {n} {As} Bool t' CsAs = equivalence F.id F.id
-  SynSemSub {n} {As} (Var x) t' CsAs with (x ~F? fromNat n)
-  SynSemSub {n} {As} (Var x) t' CsAs | yes refl =
-    equivalence (subst F.id (P.sym (lookup-last {n} {As} CsAs))) (subst F.id (lookup-last {n} {As} CsAs))
-    where lookup-last : forall {n} {As : Vec Set n} {B : Set} {Cs : Vec Set (suc n)} (CsAsB : Cs =~= As ++ Vec.[ B ]) -> lookup (fromNat n) Cs =~= B
-          lookup-last {zero} {[]} {B} refl = refl
-          lookup-last {suc n} {A :: As} {B} {C :: Cs} p = lookup-last {n} {As} {B} {Cs} (::-inj2 p)
-  SynSemSub {n} {As} (Var x) t' CsAs | no contra =
-    equivalence (subst F.id (lookup-strengthen CsAs)) (subst F.id (P.sym (lookup-strengthen CsAs)))
-    where lookup-strengthen : forall {n} {x} {contra} {As : Vec Set n} {B : Set} {Cs : Vec Set (suc n)}
-                              (CsAsB : Cs =~= As ++ Vec.[ B ]) -> lookup (strengthenF x contra) As =~= lookup x Cs
-          lookup-strengthen {.0} {zero} {contra} {[]} {B} {C :: Cs} p = magic (contra refl)
-          lookup-strengthen {.(suc _)} {zero} {contra} {A :: As} {B} {C :: Cs} p = ::-inj1 (P.sym p)
-          lookup-strengthen {zero} {suc ()} {contra} {[]} {B} {Cs} p
-          lookup-strengthen {suc n} {suc x} {contra} {A :: As} {B} {C :: Cs} p = lookup-strengthen (::-inj2 p)
-  SynSemSub {n} {As} (t *t s) t' CsAs =
-    equivalence (\ { (tv , sv) -> Equivalence.to (SynSemSub t t' CsAs) <$> tv , Equivalence.to (SynSemSub s t' CsAs) <$> sv })
-                (\ { (tv , sv) -> Equivalence.from (SynSemSub t t' CsAs) <$> tv , Equivalence.from (SynSemSub s t' CsAs) <$> sv })
-  SynSemSub {n} {As} (t +t s) t' CsAs =
-    equivalence (\ { (inj1 tv) -> inj1 (Equivalence.to (SynSemSub t t' CsAs) <$> tv) ; (inj2 sv) -> inj2 (Equivalence.to (SynSemSub s t' CsAs) <$> sv) })
-                (\ { (inj1 tv) -> inj1 (Equivalence.from (SynSemSub t t' CsAs) <$> tv) ; (inj2 sv) -> inj2 (Equivalence.from (SynSemSub s t' CsAs) <$> sv) })
-  SynSemSub {n} {As} {Cs} (Rec t) t' CsAs =
-    {- TODO prove cases -}
-    equivalence (\ v -> in-f (Equivalence.to (SynSemSub t (shiftType zero t') believe-me) <$> Fix.out-f v))
-                (\ v -> in-f (Equivalence.from (SynSemSub t (shiftType zero t') believe-me) <$> Fix.out-f v))
-
+  SynSemSub : forall t t' -> Equiv [[ t < t' > ]]t ([[ t ]]t' [[ t' ]]t)
+  SynSemSub Int t' = equivalence F.id F.id
+  SynSemSub Bool t' = equivalence F.id F.id
+  SynSemSub Var t' = equivalence F.id F.id
+  SynSemSub (t *t s) t' =
+    equivalence (\ { (tv , sv) -> to (SynSemSub t t') <$> tv , to (SynSemSub s t') <$> sv })
+                (\ { (tv , sv) -> from (SynSemSub t t') <$> tv , from (SynSemSub s t') <$> sv } )
+  SynSemSub (t +t s) t' =
+    equivalence (\ { (inj1 tv) -> inj1 (to (SynSemSub t t') <$> tv) ; (inj2 sv) -> inj2 (to (SynSemSub s t') <$> sv) })
+                (\ { (inj1 tv) -> inj1 (from (SynSemSub t t') <$> tv) ; (inj2 sv) -> inj2 (from (SynSemSub s t') <$> sv) })
   ConcreteSemanticOps : SemanticOps
   ConcreteSemanticOps = record
-                          { [[_]]t' = [[_]]t'
+                          { [[_]]t = [[_]]t
                           ; I-num = \ n -> n
                           ; _-I_ = _-Z_
                           ; _+I_ = _+Z_
@@ -122,114 +103,93 @@ module Concrete where
                           ; P-snd = proj2
                           ; S-left = inj1
                           ; S-right = inj2
-                          ; S-case = \ v c1 c2 -> case v of \ {
-                                            (inj1 x) -> c1 x;
-                                            (inj2 y) -> c2 y
-                                           }
-                          ; S-abs = \ {t} x -> in-f (Equivalence.to (SynSemSub t (Rec t) refl) <$> x)
-                          ; S-rep = \ {t} x -> Equivalence.from (SynSemSub t (Rec t) refl) <$> Fix.out-f x
+                          ; S-case =
+                             \ v c1 c2 ->
+                               case v of \ {
+                                  (inj1 x) -> c1 x;
+                                  (inj2 y) -> c2 y
+                                }
+                          ; S-abs = \ {t} x -> in-f (to (SynSemSub t (Rec t)) <$> x)
+                          ; S-rep = \ {t} x -> from (SynSemSub t (Rec t)) <$> Fix.out-f x
                           }
 
 module Abstract (depth : Nat) where
-  [[_]]t' : forall {n} -> Type' n -> Vec Set n -> Set
-  [[ Int ]]t' As = Sign
-  [[ Bool ]]t' As = B2 -> B2
-  [[ Var x ]]t' As = lookup x As
-  [[ t *t s ]]t' As = [[ t ]]t' As *O* [[ s ]]t' As
-  [[ t +t s ]]t' As = [[ t ]]t' As ** [[ s ]]t' As
-  [[ Rec t ]]t' As = Fix# (\ B -> [[ t ]]t' (B :: As)) depth
+  open Equivalence
 
-  [[_]]t : Type -> Set
-  [[ t ]]t = [[ t ]]t' []
+  [[_]]t' : Type' opn -> Set -> Set
+  [[ Int ]]t' A = Sign
+  [[ Bool ]]t' A = B2 -> B2
+  [[ Var ]]t' A = A
+  [[ t *t s ]]t' A = [[ t ]]t' A *O* [[ s ]]t' A
+  [[ t +t s ]]t' A = [[ t ]]t' A ** [[ s ]]t' A
 
-  lookup-lat : forall {n} (x : Fin n) (AsL : Vec (Sigma Set IsLattice) n) -> IsLattice (lookup x (Vec.map proj1 AsL))
-  lookup-lat () []
-  lookup-lat zero ((A , LA) :: AsL) = LA
-  lookup-lat (suc x) ((A , LA) :: AsL) = lookup-lat x AsL
+  [[_]]t : Type' cls -> Set
+  [[ Int ]]t = Sign
+  [[ Bool ]]t = B2 -> B2
+  [[ t *t s ]]t = [[ t ]]t *O* [[ s ]]t
+  [[ t +t s ]]t = [[ t ]]t ** [[ s ]]t
+  [[ Rec t ]]t = Fix# [[ t ]]t' depth
 
-  TypeLattice' : forall {n} -> (t : Type' n) (AsL : Vec (Sigma Set IsLattice) n) -> IsLattice ([[ t ]]t' (Vec.map proj1 AsL))
-  TypeLattice' Int AsL = SignLat
-  TypeLattice' Bool AsL = BoolLat
-  TypeLattice' (Var x) AsL = lookup-lat x AsL
-  TypeLattice' (t *t s) AsL = CoalescedProdLat {{TypeLattice' t AsL}} {{TypeLattice' s AsL}}
-  TypeLattice' (t +t s) AsL = ProdLat {{TypeLattice' t AsL}} {{TypeLattice' s AsL}}
-  TypeLattice' (Rec t) AsL = Fix#-Lat {{\ {X#} LX# -> TypeLattice' t ((X# , LX#) :: AsL)}}
-
-  instance
-    TypeLattice : {t : Type} -> IsLattice ([[ t ]]t)
-    TypeLattice {t} = TypeLattice' t []
-
-  lookup-declat : forall {n} (x : Fin n) (AsLDL : Vec (Sigma (Sigma Set IsLattice) (\ { (A , LA) -> IsDecLattice A {{LA}}})) n)
-                -> IsDecLattice (lookup x (Vec.map proj1 (Vec.map proj1 AsLDL))) {{lookup-lat x (Vec.map proj1 AsLDL)}}
-  lookup-declat () []
-  lookup-declat zero (((A , LA) , DLA) :: AsLDL) = DLA
-  lookup-declat (suc x) (((A , LA) , DLA) :: AsLDL) = lookup-declat x AsLDL
-
-  TypeDecLattice' : forall {n} (t : Type' n) (AsLDL : Vec (Sigma (Sigma Set IsLattice) (\ { (A , LA) -> IsDecLattice A {{LA}}})) n)
-                  -> IsDecLattice ([[ t ]]t' (Vec.map proj1 (Vec.map proj1 AsLDL))) {{TypeLattice' t (Vec.map proj1 AsLDL)}}
-  TypeDecLattice' Int AsLDL = SignDecLat
-  TypeDecLattice' Bool AsLDL = BoolDecLat
-  TypeDecLattice' (Var x) AsLDL = lookup-declat x AsLDL
-  TypeDecLattice' (t *t s) AsLDL = CoalescedProdDecLat {{TypeLattice' t (Vec.map proj1 AsLDL)}} {{TypeLattice' s (Vec.map proj1 AsLDL)}}
-                                                       {{TypeDecLattice' t AsLDL}} {{TypeDecLattice' s AsLDL}}
-  TypeDecLattice' (t +t s) AsLDL = ProdDecLat {{TypeLattice' t (Vec.map proj1 AsLDL)}} {{TypeLattice' s (Vec.map proj1 AsLDL)}}
-                                              {{TypeDecLattice' t AsLDL}} {{TypeDecLattice' s AsLDL}}
-  TypeDecLattice' (Rec t) AsLDL = Fix#-DecLat {{\ {X#} LX# -> TypeLattice' t ((X# , LX#) :: Vec.map proj1 AsLDL)}}
-                                              {{\ {X#} {{LX#}} DLX# -> TypeDecLattice' t (((X# , LX#) , DLX#) :: AsLDL)}}
+  TypeLattice' : forall {t} {A} -> IsLattice A -> IsLattice ([[ t ]]t' A)
+  TypeLattice' {Int} LA = SignLat
+  TypeLattice' {Bool} LA = BoolLat
+  TypeLattice' {Var} LA = LA
+  TypeLattice' {t *t s} LA = CoalescedProdLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
+  TypeLattice' {t +t s} LA = ProdLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
 
   instance
-    TypeDecLattice : {t : Type} -> IsDecLattice ([[ t ]]t) {{TypeLattice {t}}}
-    TypeDecLattice {t} = TypeDecLattice' t []
+    TypeLattice : forall {t} -> IsLattice ([[ t ]]t)
+    TypeLattice {Int} = SignLat
+    TypeLattice {Bool} = BoolLat
+    TypeLattice {t *t s} = CoalescedProdLat
+    TypeLattice {t +t s} = ProdLat
+    TypeLattice {Rec t} = Fix#-Lat {{TypeLattice' {t}}}
 
-  SynSemSub : forall {n As} {CsL : Vec (Sigma Set IsLattice) (suc n)} (t : Type' (suc n)) (t' : Type' n)
-                     (CsAs : Vec.map proj1 CsL =~= As ++ Vec.[ [[ t' ]]t' As ])
-                     -> Equiv ([[ t < t' > ]]t' As) ([[ t ]]t' (Vec.map proj1 CsL))
-  SynSemSub {n} {As} {CsL} Int t' CsAs = equivalence F.id F.id
-  SynSemSub {n} {As} {CsL} Bool t' CsAs = equivalence F.id F.id
-  SynSemSub {n} {As} {CsL} (Var x) t' CsAs with (x ~F? fromNat n)
-  SynSemSub {n} {As} {CsL} (Var .(fromNat n)) t' CsAs | yes refl =
-    equivalence (subst F.id (P.sym (lookup-last {n} {As} CsAs))) (subst F.id (lookup-last {n} {As} CsAs))
-    where lookup-last : forall {n} {As : Vec Set n} {B : Set} {CsL : Vec Set (suc n)} (CsAsB : CsL =~= As ++ Vec.[ B ]) -> lookup (fromNat n) CsL =~= B
-          lookup-last {zero} {[]} {B} {.(B :: [])} refl = refl
-          lookup-last {suc n} {A :: As} {B} {C :: CsL} CsAsB = lookup-last {n} {As} {B} {CsL} (::-inj2 CsAsB)
-  SynSemSub {n} {As} {CsL} (Var x) t' CsAs | no contra =
-    equivalence (subst F.id (lookup-strengthen CsAs)) (subst F.id (P.sym (lookup-strengthen CsAs)))
-    where lookup-strengthen : forall {n} {x} {contra} {As : Vec Set n} {B : Set} {CsL : Vec Set (suc n)}
-                              (CsAsB : CsL =~= As ++ Vec.[ B ]) -> lookup (strengthenF x contra) As =~= lookup x CsL
-          lookup-strengthen {.0} {zero} {contra} {[]} {B} {C :: CsL} p = magic (contra refl)
-          lookup-strengthen {.(suc _)} {zero} {contra} {A :: As} {B} {C :: CsL} p = ::-inj1 (P.sym p)
-          lookup-strengthen {zero} {suc ()} {contra} {[]} {B} {CsL} p
-          lookup-strengthen {suc n} {suc x} {contra} {A :: As} {B} {C :: CsL} p = lookup-strengthen (::-inj2 p)
-  SynSemSub {n} {As} {CsL} (t *t s) t' CsAs =
-    equivalence (\ tsv -> _,,_ {{TypeLattice' t CsL}} {{TypeLattice' s CsL}}
-                               (Equivalence.to (SynSemSub t t' CsAs) <$> Abs.fst {{latt}} {{lats}} tsv)
-                               (Equivalence.to (SynSemSub s t' CsAs) <$> Abs.snd {{latt}} {{lats}} tsv))
-                (\ tsv -> _,,_ {{latt}} {{lats}}
-                               (Equivalence.from (SynSemSub t t' CsAs) <$> Abs.fst {{TypeLattice' t CsL}} {{TypeLattice' s CsL}} tsv)
-                               (Equivalence.from (SynSemSub s t' CsAs) <$> Abs.snd {{TypeLattice' t CsL}} {{TypeLattice' s CsL}} tsv))
-    where latt-map : forall {n} {A} {As : Vec Set n} (CsL : Vec (Sigma Set IsLattice) (suc n)) (CsAs : Vec.map proj1 CsL =~= As ++ Vec.[ A ])
-                     -> Vec (Sigma Set IsLattice) (n +N 1)
-          latt-map {zero} {.C} {[]} ((C , LC) :: []) refl = Vec.[ ((C , LC)) ]
-          latt-map {suc n} {A} {A2 :: As} ((C , LC) :: CsL) CsAs =
-               (A2 , subst (\ x -> IsLattice x) (::-inj1 CsAs) LC) :: latt-map {n} {A} {As} CsL (::-inj2 CsAs)
-          latt-map-prop : forall {n} {A} {As : Vec Set n} (CsL : Vec (Sigma Set IsLattice) (suc n)) (CsAs : Vec.map proj1 CsL =~= As ++ Vec.[ A ])
-            -> Vec.map proj1 (Util.take n (latt-map {A = A} {As = As} CsL CsAs)) =~= As
-          latt-map-prop {zero} {A} {[]} CsL CsAs = refl
-          latt-map-prop {suc n} {A} {A2 :: As} ((C , LC) :: CsL) CsAs = P.cong (\ x -> A2 :: x) (latt-map-prop {n} {A} {As} CsL (::-inj2 CsAs))
-          latt : IsLattice ([[ t < t' > ]]t' As)
-          latt = subst (\ x -> IsLattice ([[ t < t' > ]]t' x)) (latt-map-prop {As = As} CsL CsAs)
-                  (TypeLattice' (t < t' >) (Util.take n (latt-map {As = As} CsL CsAs)))
-          lats : IsLattice ([[ s < t' > ]]t' As)
-          lats = subst (\ x -> IsLattice ([[ s < t' > ]]t' x)) (latt-map-prop {As = As} CsL CsAs)
-                  (TypeLattice' (s < t' >) (Util.take n (latt-map {As = As} CsL CsAs)))
-  SynSemSub {n} {As} {CsL} (t +t s) t' CsAs =
-    equivalence (\ { (tv , sv) -> Equivalence.to (SynSemSub t t' CsAs) <$> tv , Equivalence.to (SynSemSub s t' CsAs) <$> sv })
-                (\ { (tv , sv) -> Equivalence.from (SynSemSub t t' CsAs) <$> tv , Equivalence.from (SynSemSub s t' CsAs) <$> sv })
-  SynSemSub {n} {As} {CsL} (Rec t) t' CsAs = {!!}
+  tmap : forall {A B : Set} {{LA : IsLattice A}} {{LB : IsLattice B}} t -> (f : A -> B) → [[ t ]]t' A → [[ t ]]t' B
+  tmap Int f v = v
+  tmap Bool f v = v
+  tmap Var f v = f v
+  tmap {{LA}} {{LB}} (t *t s) f v =
+    _,,_ {{TypeLattice' {t} LB}} {{TypeLattice' {s} LB}}
+    (tmap {{LA}} {{LB}} t f (Abs.fst {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}} v))
+    (tmap {{LA}} {{LB}} s f (Abs.snd {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}} v))
+  tmap {{LA}} {{LB}} (t +t s) f (tv , sv) = tmap {{LA}} {{LB}} t f tv , tmap {{LA}} {{LB}} s f sv
 
+  TypeDecLattice' : forall {A} {{LA : IsLattice A}} {{DLA : IsDecLattice A {{LA}}}}
+                    {t} -> IsDecLattice ([[ t ]]t' A) {{TypeLattice' {t} LA}}
+  TypeDecLattice' {A} {{LA}} {{DLA}} {Int} = SignDecLat
+  TypeDecLattice' {A} {{LA}} {{DLA}} {Bool} = BoolDecLat
+  TypeDecLattice' {A} {{LA}} {{DLA}} {Var} = DLA
+  TypeDecLattice' {A} {{LA}} {{DLA}} {t *t s} =
+    CoalescedProdDecLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
+                        {{TypeDecLattice' {{LA}} {{DLA}} {t}}} {{TypeDecLattice' {{LA}} {{DLA}} {s}}}
+  TypeDecLattice' {A} {{LA}} {{DLA}} {t +t s} =
+    ProdDecLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
+               {{TypeDecLattice' {{LA}} {{DLA}} {t}}} {{TypeDecLattice' {{LA}} {{DLA}} {s}}}
+
+  instance
+    TypeDecLattice : forall {t} -> IsDecLattice [[ t ]]t
+    TypeDecLattice {Int} = SignDecLat
+    TypeDecLattice {Bool} = BoolDecLat
+    TypeDecLattice {t *t s} = CoalescedProdDecLat
+    TypeDecLattice {t +t s} = ProdDecLat
+    TypeDecLattice {Rec t} = Fix#-DecLat {{TypeLattice' {t}}} {{\ {X#} {{LX#}} DLX# -> TypeDecLattice' {{LX#}} {{DLX#}} {t}}}
+
+  SynSemSub : forall t t' -> Equiv [[ t < t' > ]]t ([[ t ]]t' [[ t' ]]t)
+  SynSemSub Int t' = equivalence F.id F.id
+  SynSemSub Bool t' = equivalence F.id F.id
+  SynSemSub Var t' = equivalence F.id F.id
+  SynSemSub (t *t s) t' =
+    equivalence (\ tsv -> _,,_ {{TypeLattice' {t} TypeLattice}} {{TypeLattice' {s} TypeLattice}}
+                               (to (SynSemSub t t') <$> Abs.fst tsv) (to (SynSemSub s t') <$> Abs.snd tsv))
+                (\ tsv -> (from (SynSemSub t t') <$> Abs.fst {{TypeLattice' {t} TypeLattice}} {{TypeLattice' {s} TypeLattice}} tsv) ,,
+                          (from (SynSemSub s t') <$> Abs.snd {{TypeLattice' {t} TypeLattice}} {{TypeLattice' {s} TypeLattice}} tsv))
+  SynSemSub (t +t s) t' =
+    equivalence (\ { (tv , sv) -> to (SynSemSub t t') <$> tv , to (SynSemSub s t') <$> sv })
+                (\ { (tv , sv) -> from (SynSemSub t t') <$> tv , from (SynSemSub s t') <$> sv } )
   AbstractSemanticOps : SemanticOps
   AbstractSemanticOps = record
-                          { [[_]]t' = [[_]]t'
+                          { [[_]]t = [[_]]t
                           ; I-num = fromInteger
                           ; _-I_ = Sign-minus
                           ; _+I_ = Sign-plus
@@ -250,10 +210,22 @@ module Abstract (depth : Nat) where
                                     let open IsLattice (TypeLattice {w})
                                     in (B2.if (toBool (IsLattice.is-bot (TypeLattice {t}) tv)) then bot else tf tv) lub
                                        (B2.if (toBool (IsLattice.is-bot (TypeLattice {s}) sv)) then bot else sf sv)  }
-                          ; S-abs = \ {t} -> case (depth , refl) return (\ (n : Sigma Nat (\ n -> n =~= depth)) -> [[ t < Rec t > ]]t' [] ->
-                                                                            Fix# (\ B -> [[ t ]]t' (B :: [])) (proj1 n)) of (\
-                                                               { (zero , refl) -> \ _ -> in-bot ;
-                                                                 ((suc n) , p) -> \ x -> in-f# (Equivalence.to (SynSemSub t (Rec t) {!!}) <$> x)
-                                                               })
-                          ; S-rep = \ {t} -> {!!}
+                          ; S-abs = (\ {t} -> absv {t})
+                          ; S-rep = (\ {t} -> repv {t})
                           }
+    where absv : forall {t} -> [[ t < Rec t > ]]t -> [[ Rec t ]]t
+          absv {t} = case depth , refl return (\ (np : Sigma Nat (_=~= depth)) ->
+                                                  [[ t < Rec t > ]]t -> Fix# (\ B -> [[ t ]]t' B) (proj1 np)) of (\ {
+                                                    (zero , refl) -> \ _ -> in-bot ;
+                                                    (suc n , p) -> \ v ->
+                                                      let nv : [[ t ]]t' (Fix# [[ t ]]t' (suc n))
+                                                          nv = subst (\ m -> [[ t ]]t' (Fix# [[ t ]]t' m)) (P.sym p) (to (SynSemSub t (Rec t)) <$> v)
+                                                      in in-f# (tmap {{Fix#-Lat {{TypeLattice' {t}}}}} {{Fix#-Lat {{TypeLattice' {t}}}}} t
+                                                                (from (FixEquiv {{TypeLattice' {t}}}
+                                                                      (\ {A} {B} {{LA}} {{LB}} -> tmap {A} {B} {{LA}} {{LB}} t)) <$>_) nv)
+                                                  })
+          repv : forall {t} -> [[ Rec t ]]t -> [[ t < Rec t > ]]t
+          repv {t} in-bot = IsLattice.bot (TypeLattice {t < Rec t >})
+          repv {t} (in-f# x) = from (SynSemSub t (Rec t)) <$>
+                                 tmap {{Fix#-Lat {{TypeLattice' {t}}}}} {{Fix#-Lat {{TypeLattice' {t}}}}} t
+                                      (to (FixEquiv {{TypeLattice' {t}}} (\ {A} {B} {{LA}} {{LB}} -> tmap {A} {B} {{LA}} {{LB}} t)) <$>_) x

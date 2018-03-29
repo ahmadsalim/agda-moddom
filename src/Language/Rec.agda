@@ -14,38 +14,24 @@ open import Util renaming (_≟F_ to _~F?_)
 infixr 6 _*t_
 infixr 4 _+t_
 
-data Type' (n : Nat) : Set where
-  Int  : Type' n
-  Bool : Type' n
-  Var  : Fin n -> Type' n
-  _*t_ _+t_  : Type' n -> Type' n -> Type' n
-  Rec  : Type' (suc n) -> Type' n
+data State : Set where opn cls : State
+
+data Type' : State -> Set where
+  Int  : forall {s} -> Type' s
+  Bool : forall {s} -> Type' s
+  Var  : Type' opn
+  _*t_ _+t_  : forall {s} -> Type' s -> Type' s -> Type' s
+  Rec  : Type' opn -> Type' cls
 
 Type : Set
-Type = Type' zero
+Type = Type' cls
 
-shiftVar : forall {n} -> Fin (suc n) -> Fin n -> Fin (suc n)
-shiftVar c x with (c <=F? (weakenF x))
-shiftVar c x | yes _ = suc x
-shiftVar c x | no _ = weakenF x
-
-shiftType : forall {n} -> Fin (suc n) -> Type' n -> Type' (suc n)
-shiftType x Int = Int
-shiftType x Bool = Bool
-shiftType x (Var y) = Var (shiftVar x y)
-shiftType x (t1 *t t2) = shiftType x t1 *t shiftType x t2
-shiftType x (t1 +t t2) = shiftType x t1 +t shiftType x t2
-shiftType x (Rec t) = Rec (shiftType (suc x) t)
-
-_<_> : forall {n} -> Type' (suc n) -> Type' n -> Type' n
+_<_> : Type' opn -> Type' cls -> Type' cls
 Int < t' > = Int
 Bool < t' > = Bool
-_<_> {n} (Var x) t' with (x ~F? (fromNat n))
-_<_> {n} (Var x) t' | yes _ = t'
-_<_> {n} (Var x) t' | no contra = Var (strengthenF x contra)
+Var < t' > = t'
 (t1 *t t2) < t' > = t1 < t' > *t t2 < t' >
 (t1 +t t2) < t' > = t1 < t' > +t t2 < t' >
-(Rec t) < t' > = Rec (t < shiftType zero t' >)
 
 record FunType : Set where
   field
