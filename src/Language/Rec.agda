@@ -17,8 +17,9 @@ infixr 4 _+t_
 data State : Set where opn cls : State
 
 data Type' : State -> Set where
-  Int  : forall {s} -> Type' s
-  Bool : forall {s} -> Type' s
+  Int  : Type' cls
+  Bool : Type' cls
+  Const : Type' cls -> Type' opn
   Var  : Type' opn
   _*t_ _+t_  : forall {s} -> Type' s -> Type' s -> Type' s
   Rec  : Type' opn -> Type' cls
@@ -27,13 +28,13 @@ Type : Set
 Type = Type' cls
 
 _<_> : Type' opn -> Type' cls -> Type' cls
-Int < t' > = Int
-Bool < t' > = Bool
 Var < t' > = t'
+(Const t) < t' > = t
 (t1 *t t2) < t' > = t1 < t' > *t t2 < t' >
 (t1 +t t2) < t' > = t1 < t' > +t t2 < t' >
 
 record FunType : Set where
+  constructor _==>_
   field
     argtys   : List Type
     returnty : Type
@@ -51,12 +52,20 @@ data BinaryOp (A : Set) : Set where
 data LogicOp (A : Set) : Set where
   _<=_ _~_ : A -> A -> LogicOp A
 
+data BoolOp (A : Set) : Set where
+  _\/_ _/\_ : A -> A -> BoolOp A
+  not : A -> BoolOp A
+
 mutual
   data Expr {n m : Nat} (G : Ctx n) (D : FunCtx m) : Type -> Set where
     const : Integer -> Expr G D Int
     $_ : forall {t} (x : Fin n) {{tc : t == lookup x G}} -> Expr G D t
-    [_]b : BinaryOp (Expr G D Int) -> Expr G D Int
+    [_]2 : BinaryOp (Expr G D Int) -> Expr G D Int
     [_]l : LogicOp (Expr G D Int) -> Expr G D Bool
+    [_]b : BoolOp (Expr G D Bool) -> Expr G D Bool
+    true : Expr G D Bool
+    false : Expr G D Bool
+    lett_inn_ : forall {t1 t2} -> Expr G D t1 -> Expr (t1 :: G) D t2 -> Expr G D t2
     if_then_else_ : forall {t} -> Expr G D Bool -> Expr G D t -> Expr G D t -> Expr G D t
     _!_ : forall {ft} (f : Fin m) {{ftc : ft == lookup f D}} -> Exprs G D (argtys ft) -> Expr G D (returnty ft)
     _,_ : forall {t1 t2} -> Expr G D t1 -> Expr G D t2 -> Expr G D (t1 *t t2)

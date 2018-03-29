@@ -11,6 +11,7 @@ open import Relation.Binary.HeterogeneousEquality as H
 open import Size
 open import Category.Monad
 open import Data.Vec using (Vec; _++_; _∷_)
+open import Data.Maybe
 
 weakenF : ∀ {n} → Fin n → Fin (suc n)
 weakenF zero = zero
@@ -52,6 +53,15 @@ module Delays where
 
     _>>=i_ : forall {i A B} -> InfDelay i A -> (A -> Delay i B) -> InfDelay i B
     force (di >>=i f) = force di >>= f
+
+    unroll : forall {i} {j : Size< i} {A} -> Delay i A -> Delay j A
+    unroll (now x) = now x
+    unroll (later x) = force x
+
+  run : forall {A} (n : ℕ) -> Delay ∞ A -> Maybe A
+  run n (now x) = just x
+  run zero (later x) = nothing
+  run (suc n) (later x) = run n (force x)
 
 instance
   delayMonad : forall {i} -> RawMonad (Delay i)

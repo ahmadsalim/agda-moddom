@@ -5,11 +5,13 @@ open import Data.Integer renaming (ℤ to Integer; _+_ to _+Z_; _*_ to _*Z_; _-_
                                    _≤?_ to _<=?Z_; _≟_ to _~?Z_)
 open import Data.Nat renaming (ℕ to Nat)
 open import Data.Fin
+open import Data.Maybe
 open import Data.Unit renaming (⊤ to Unit)
 open import Data.Bool as B2 renaming (Bool to B2)
 open import Data.Empty renaming (⊥ to Empty; ⊥-elim to magic)
 open import Data.Sum renaming (_⊎_ to Either; inj₁ to inj1; inj₂ to inj2)
 open import Data.Product renaming (_×_ to _**_; Σ to Sigma; proj₁ to proj1; proj₂ to proj2)
+open import Data.List as List
 open import Data.Vec as Vec renaming (_∷_ to _::_)
 open import Data.Vec.All as VA renaming (_∷_ to _::_)
 open import Relation.Nullary.Decidable as Dec renaming (⌊_⌋ to toBool)
@@ -52,23 +54,7 @@ record SemanticOps : Set1 where
     S-abs : forall {t} -> [[ t < Rec t > ]]t -> [[ Rec t ]]t
     S-rep : forall {t} -> [[ Rec t ]]t -> [[ t < Rec t > ]]t
 
-module ConcreteOps where
-  open Equivalence
-
-  [[_]]t' : Type' opn -> Set -> Set
-  [[ Int ]]t' A = Integer
-  [[ Bool ]]t' A = B2
-  [[ Var ]]t' A = A
-  [[ t *t s ]]t' A = ([[ t ]]t' A) ** ([[ s ]]t' A)
-  [[ t +t s ]]t' A = Either ([[ t ]]t' A) ([[ s ]]t' A)
-
-  [[_]]t : Type' cls -> Set
-  [[ Int ]]t = Integer
-  [[ Bool ]]t = B2
-  [[ t *t s ]]t = [[ t ]]t ** [[ s ]]t
-  [[ t +t s ]]t = Either [[ t ]]t [[ s ]]t
-  [[ Rec t ]]t = Fix [[ t ]]t'
-
+module Fixing where
   mutual
     fix : forall {i} {A} (f : A -> A) -> Delay i A
     fix f = later (fix' f) Delays.>>= (\ x -> now (f x))
@@ -76,9 +62,25 @@ module ConcreteOps where
     fix' : forall {i} {A} (f : A -> A) -> InfDelay i A
     InfDelay.force (fix' f) = fix f
 
+module ConcreteOps where
+  open Equivalence
+
+  mutual
+    [[_]]t' : Type' opn -> Set -> Set
+    [[ Var ]]t' A = A
+    [[ Const t ]]t' A = [[ t ]]t
+    [[ t *t s ]]t' A = ([[ t ]]t' A) ** ([[ s ]]t' A)
+    [[ t +t s ]]t' A = Either ([[ t ]]t' A) ([[ s ]]t' A)
+
+    [[_]]t : Type' cls -> Set
+    [[ Int ]]t = Integer
+    [[ Bool ]]t = B2
+    [[ t *t s ]]t = [[ t ]]t ** [[ s ]]t
+    [[ t +t s ]]t = Either [[ t ]]t [[ s ]]t
+    [[ Rec t ]]t = Fix [[ t ]]t'
+
   SynSemSub : forall t t' -> Equiv [[ t < t' > ]]t ([[ t ]]t' [[ t' ]]t)
-  SynSemSub Int t' = equivalence F.id F.id
-  SynSemSub Bool t' = equivalence F.id F.id
+  SynSemSub (Const t) t' = equivalence F.id F.id
   SynSemSub Var t' = equivalence F.id F.id
   SynSemSub (t *t s) t' =
     equivalence (\ { (tv , sv) -> to (SynSemSub t t') <$> tv , to (SynSemSub s t') <$> sv })
@@ -116,38 +118,37 @@ module ConcreteOps where
 module AbstractOps (depth : Nat) where
   open Equivalence
 
-  [[_]]t' : Type' opn -> Set -> Set
-  [[ Int ]]t' A = Sign
-  [[ Bool ]]t' A = B2 -> B2
-  [[ Var ]]t' A = A
-  [[ t *t s ]]t' A = [[ t ]]t' A *O* [[ s ]]t' A
-  [[ t +t s ]]t' A = [[ t ]]t' A ** [[ s ]]t' A
+  mutual
+    [[_]]t' : Type' opn -> Set -> Set
+    [[ Const t ]]t' A = [[ t ]]t
+    [[ Var ]]t' A = A
+    [[ t *t s ]]t' A = [[ t ]]t' A *O* [[ s ]]t' A
+    [[ t +t s ]]t' A = [[ t ]]t' A ** [[ s ]]t' A
 
-  [[_]]t : Type' cls -> Set
-  [[ Int ]]t = Sign
-  [[ Bool ]]t = B2 -> B2
-  [[ t *t s ]]t = [[ t ]]t *O* [[ s ]]t
-  [[ t +t s ]]t = [[ t ]]t ** [[ s ]]t
-  [[ Rec t ]]t = Fix# [[ t ]]t' depth
+    [[_]]t : Type' cls -> Set
+    [[ Int ]]t = Sign
+    [[ Bool ]]t = B2 -> B2
+    [[ t *t s ]]t = [[ t ]]t *O* [[ s ]]t
+    [[ t +t s ]]t = [[ t ]]t ** [[ s ]]t
+    [[ Rec t ]]t = Fix# [[ t ]]t' depth
 
-  TypeLattice' : forall {t} {A} -> IsLattice A -> IsLattice ([[ t ]]t' A)
-  TypeLattice' {Int} LA = SignLat
-  TypeLattice' {Bool} LA = BoolLat
-  TypeLattice' {Var} LA = LA
-  TypeLattice' {t *t s} LA = CoalescedProdLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
-  TypeLattice' {t +t s} LA = ProdLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
+  mutual
+    TypeLattice' : forall {t} {A} -> IsLattice A -> IsLattice ([[ t ]]t' A)
+    TypeLattice' {Const t} LA = TypeLattice {t}
+    TypeLattice' {Var} LA = LA
+    TypeLattice' {t *t s} LA = CoalescedProdLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
+    TypeLattice' {t +t s} LA = ProdLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
 
-  instance
-    TypeLattice : forall {t} -> IsLattice ([[ t ]]t)
-    TypeLattice {Int} = SignLat
-    TypeLattice {Bool} = BoolLat
-    TypeLattice {t *t s} = CoalescedProdLat
-    TypeLattice {t +t s} = ProdLat
-    TypeLattice {Rec t} = Fix#-Lat {{TypeLattice' {t}}}
+    instance
+      TypeLattice : forall {t} -> IsLattice ([[ t ]]t)
+      TypeLattice {Int} = SignLat
+      TypeLattice {Bool} = BoolLat
+      TypeLattice {t *t s} = CoalescedProdLat
+      TypeLattice {t +t s} = ProdLat
+      TypeLattice {Rec t} = Fix#-Lat {{TypeLattice' {t}}}
 
   tmap : forall {A B : Set} {{LA : IsLattice A}} {{LB : IsLattice B}} t -> (f : A -> B) → [[ t ]]t' A → [[ t ]]t' B
-  tmap Int f v = v
-  tmap Bool f v = v
+  tmap (Const t) f v = v
   tmap Var f v = f v
   tmap {{LA}} {{LB}} (t *t s) f v =
     _,,_ {{TypeLattice' {t} LB}} {{TypeLattice' {s} LB}}
@@ -155,29 +156,28 @@ module AbstractOps (depth : Nat) where
     (tmap {{LA}} {{LB}} s f (Abs.snd {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}} v))
   tmap {{LA}} {{LB}} (t +t s) f (tv , sv) = tmap {{LA}} {{LB}} t f tv , tmap {{LA}} {{LB}} s f sv
 
-  TypeDecLattice' : forall {A} {{LA : IsLattice A}} {{DLA : IsDecLattice A {{LA}}}}
-                    {t} -> IsDecLattice ([[ t ]]t' A) {{TypeLattice' {t} LA}}
-  TypeDecLattice' {A} {{LA}} {{DLA}} {Int} = SignDecLat
-  TypeDecLattice' {A} {{LA}} {{DLA}} {Bool} = BoolDecLat
-  TypeDecLattice' {A} {{LA}} {{DLA}} {Var} = DLA
-  TypeDecLattice' {A} {{LA}} {{DLA}} {t *t s} =
-    CoalescedProdDecLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
-                        {{TypeDecLattice' {{LA}} {{DLA}} {t}}} {{TypeDecLattice' {{LA}} {{DLA}} {s}}}
-  TypeDecLattice' {A} {{LA}} {{DLA}} {t +t s} =
-    ProdDecLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
-               {{TypeDecLattice' {{LA}} {{DLA}} {t}}} {{TypeDecLattice' {{LA}} {{DLA}} {s}}}
+  mutual
+    TypeDecLattice' : forall {A} {{LA : IsLattice A}} {{DLA : IsDecLattice A {{LA}}}}
+                      {t} -> IsDecLattice ([[ t ]]t' A) {{TypeLattice' {t} LA}}
+    TypeDecLattice' {A} {{LA}} {{DLA}} {Const t} = TypeDecLattice {t}
+    TypeDecLattice' {A} {{LA}} {{DLA}} {Var} = DLA
+    TypeDecLattice' {A} {{LA}} {{DLA}} {t *t s} =
+      CoalescedProdDecLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
+                          {{TypeDecLattice' {{LA}} {{DLA}} {t}}} {{TypeDecLattice' {{LA}} {{DLA}} {s}}}
+    TypeDecLattice' {A} {{LA}} {{DLA}} {t +t s} =
+      ProdDecLat {{TypeLattice' {t} LA}} {{TypeLattice' {s} LA}}
+                {{TypeDecLattice' {{LA}} {{DLA}} {t}}} {{TypeDecLattice' {{LA}} {{DLA}} {s}}}
 
-  instance
-    TypeDecLattice : forall {t} -> IsDecLattice [[ t ]]t
-    TypeDecLattice {Int} = SignDecLat
-    TypeDecLattice {Bool} = BoolDecLat
-    TypeDecLattice {t *t s} = CoalescedProdDecLat
-    TypeDecLattice {t +t s} = ProdDecLat
-    TypeDecLattice {Rec t} = Fix#-DecLat {{TypeLattice' {t}}} {{\ {X#} {{LX#}} DLX# -> TypeDecLattice' {{LX#}} {{DLX#}} {t}}}
+    instance
+      TypeDecLattice : forall {t} -> IsDecLattice [[ t ]]t
+      TypeDecLattice {Int} = SignDecLat
+      TypeDecLattice {Bool} = BoolDecLat
+      TypeDecLattice {t *t s} = CoalescedProdDecLat
+      TypeDecLattice {t +t s} = ProdDecLat
+      TypeDecLattice {Rec t} = Fix#-DecLat {{TypeLattice' {t}}} {{\ {X#} {{LX#}} DLX# -> TypeDecLattice' {{LX#}} {{DLX#}} {t}}}
 
   SynSemSub : forall t t' -> Equiv [[ t < t' > ]]t ([[ t ]]t' [[ t' ]]t)
-  SynSemSub Int t' = equivalence F.id F.id
-  SynSemSub Bool t' = equivalence F.id F.id
+  SynSemSub (Const t) t' = equivalence F.id F.id
   SynSemSub Var t' = equivalence F.id F.id
   SynSemSub (t *t s) t' =
     equivalence (\ tsv -> _,,_ {{TypeLattice' {t} TypeLattice}} {{TypeLattice' {s} TypeLattice}}
@@ -247,11 +247,19 @@ module Semantics (Ops : SemanticOps) where
     [[_]]e : forall {n} {m} {G : Ctx n} {D : FunCtx m} {t} (e : Expr G D t) -> [[ G ]]G -> [[ D ]]D -> [[ t ]]t
     [[ Expr.const x ]]e g d = I-num x
     [[ ($ x) {{PE.refl}} ]]e g d = VA.lookup x g
-    [[ [ x + y ]b ]]e g d = [[ x ]]e g d +I [[ y ]]e g d
-    [[ [ x - y ]b ]]e g d = [[ x ]]e g d -I [[ y ]]e g d
-    [[ [ x * y ]b ]]e g d = [[ x ]]e g d *I [[ y ]]e g d
+    [[ [ x + y ]2 ]]e g d = [[ x ]]e g d +I [[ y ]]e g d
+    [[ [ x - y ]2 ]]e g d = [[ x ]]e g d -I [[ y ]]e g d
+    [[ [ x * y ]2 ]]e g d = [[ x ]]e g d *I [[ y ]]e g d
     [[ [ x <= y ]l ]]e g d = [[ x ]]e g d <=I [[ y ]]e g d
+    [[ [ x \/ y ]b ]]e g d = B-if ([[ x ]]e g d) ([[ y ]]e g d) B-ff
+    [[ [ x /\ y ]b ]]e g d = B-if ([[ x ]]e g d) B-tt ([[ y ]]e g d)
+    [[ [ not x ]b ]]e g d = B-if ([[ x ]]e g d) B-ff B-tt
+    [[ true ]]e g d = B-tt
+    [[ false ]]e g d = B-ff
     [[ [ x ~ y ]l ]]e g d = [[ x ]]e g d ~I [[ y ]]e g d
+    [[ lett eb inn er ]]e g d =
+      let vb = [[ eb ]]e g d
+      in [[ er ]]e (vb :: g) d
     [[ if e then et else ef ]]e g d = B-if ([[ e ]]e g d)
                                           ([[ et ]]e g d)
                                           ([[ ef ]]e g d)
@@ -272,9 +280,70 @@ module Semantics (Ops : SemanticOps) where
     [[ [] ]]es g d = []
     [[ e :: es ]]es g d = [[ e ]]e g d :: [[ es ]]es g d
 
-    [[_]]p : forall {m} {D : FunCtx m} {k} {D2 : FunCtx k} -> ProgDef D D2 -> [[ D ]]D -> [[ D2 ]]D
-    [[ [] ]]p d = []
-    [[ fd :: fds ]]p d = (\ avs -> [[ fd ]]e avs d) :: [[ fds ]]p d
+    [[_]]ds : forall {m} {D : FunCtx m} {k} {D2 : FunCtx k} -> ProgDef D D2 -> [[ D ]]D -> [[ D2 ]]D
+    [[ [] ]]ds d = []
+    [[ fd :: fds ]]ds d = (\ avs -> [[ fd ]]e avs d) :: [[ fds ]]ds d
 
-    [[_]] : forall {m} {D : FunCtx m} -> Prog D -> [[ D ]]D -> [[ D ]]D
-    [[ P ]] = [[ P ]]p
+    [[_]]P : forall {m} {D : FunCtx m} -> Prog D -> [[ D ]]D -> [[ D ]]D
+    [[ P ]]P = [[ P ]]ds
+
+module Example where
+  natTy' : Type' opn
+  natTy' = Const Bool +t Var
+
+  natTy : Type
+  natTy = Rec natTy'
+
+  exprTy' : Type' opn
+  exprTy' =     Const natTy -- Constant
+             +t (Var *t Var) -- Times
+             +t (Var *t Var) -- Plus
+             +t Const Int -- Variable
+  exprTy : Type
+  exprTy = Rec exprTy'
+
+  simpleExpr-sig : FunCtx 1
+  simpleExpr-sig = Vec.[ List.[ exprTy ] ==> exprTy ]
+
+  simpleExpr : Prog simpleExpr-sig
+  simpleExpr = Expr.case rep {tx = exprTy'} {{PE.refl}} ($ zero)
+               of abs {{PE.refl}} (inl ($ zero))
+               or Expr.case ($_ zero {{PE.refl}})
+               of lett _!_ zero {{PE.refl}} (Expr.fst ($_ zero {{PE.refl}}) :: [])
+                  inn lett _!_ zero {{PE.refl}} (Expr.snd ($_ (suc zero) {{PE.refl}}) :: [])
+                  inn Expr.case rep {tx = exprTy'} {{PE.refl}} ($ suc zero) -- Pattern match on first to check whether constant
+                      of Expr.case rep {tx = natTy'} {{PE.refl}} ($ zero) -- Check whether zero
+                         of abs {{PE.refl}} (inl (abs {{PE.refl}} (inl true))) -- return zero
+                         or Expr.case rep {tx = exprTy'} {{PE.refl}} ($ suc (suc zero)) -- Pattern match on second to check whether constant
+                          of Expr.case rep {tx = natTy'} {{PE.refl}} ($ zero) -- Check whether zero
+                            of abs {{PE.refl}} (inl (abs {{PE.refl}} (inl true))) -- return zero
+                            or abs {{PE.refl}} (inr (inl (($ suc (suc (suc (suc (suc zero))))) , ($ suc (suc (suc (suc zero))))))) -- identity
+                          or abs {{PE.refl}} (inr (inl (($ suc (suc (suc (suc zero)))) , ($ suc (suc (suc zero)))))) -- identity
+                      or Expr.case rep {tx = exprTy'} {{PE.refl}} ($ suc zero) -- Pattern match on second to check whether constant
+                      of Expr.case rep {tx = natTy'} {{PE.refl}} ($ zero) -- Check whether zero
+                         of abs {{PE.refl}} (inl (abs {{PE.refl}} (inl true))) -- return zero
+                         or abs {{PE.refl}} (inr (inl (($ suc (suc (suc (suc zero)))) , ($ suc (suc (suc zero)))))) -- identity
+                      or abs {{PE.refl}} (inr (inl (($ suc (suc (suc zero))) , ($ suc (suc zero)))))
+               or Expr.case $_ zero {{PE.refl}}
+               of abs {{PE.refl}} (inr (inr (inl (_!_ zero {{PE.refl}} (Expr.fst ($_ zero {{PE.refl}}) :: []) ,
+                                                  _!_ zero {{PE.refl}} (Expr.snd ($_ zero {{PE.refl}}) :: [])))))
+               or abs {{PE.refl}} (inr (inr (inr ($ zero)))) :: []
+
+module Concrete where
+  open ConcreteOps
+  open Fixing
+  open Semantics ConcreteSemanticOps
+
+  {-# NON_TERMINATING #-}
+  [[_]] : forall {m} {D : FunCtx m} -> Prog D -> [[ D ]]D
+  [[ P ]] = [[ P ]]P [[ P ]]
+
+  simpleExprSem : [[ Example.simpleExpr-sig ]]D
+  simpleExprSem = [[ Example.simpleExpr ]]
+
+module Abstract (depth : Nat) where
+  open AbstractOps depth
+  open Semantics AbstractSemanticOps
+
+  --[[_]]# : forall {i} {m} {D : FunCtx m} -> Prog D -> Delay i [[ D ]]D
+  --[[ P ]]# = {!!}
