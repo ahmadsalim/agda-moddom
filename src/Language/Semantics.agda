@@ -341,15 +341,19 @@ module Example where
                           of Expr.case rep {tx = natTy'} {{PE.refl}} ($ zero) -- Check whether zero
                             of abs {{PE.refl}} (inl (abs {{PE.refl}} (inl true))) -- return zero
                             or Expr.case rep {tx = exprTy'} {{PE.refl}} ($ suc (suc zero)) -- Pattern match on second to check whether constant
-                              of Expr.case rep {tx = natTy'} {{PE.refl}} ($ zero) -- Check whether zero
+                                                                                           -- (first constant, not zero)
+                              of Expr.case rep {tx = natTy'} {{PE.refl}} ($ zero) -- Check whether second is zero
                                 of abs {{PE.refl}} (inl (abs {{PE.refl}} (inl true))) -- return zero
-                                or abs {{PE.refl}} (inr (inl (($ suc (suc (suc (suc (suc zero))))) , ($ suc (suc (suc (suc zero))))))) -- identity
-                              or abs {{PE.refl}} (inr (inl (($ suc (suc (suc (suc zero)))) , ($ suc (suc (suc zero)))))) -- identity
-                          or Expr.case rep {tx = exprTy'} {{PE.refl}} ($ suc zero) -- Pattern match on second to check whether constant
-                          of Expr.case rep {tx = natTy'} {{PE.refl}} ($ zero) -- Check whether zero
-                            of abs {{PE.refl}} (inl (abs {{PE.refl}} (inl true))) -- return zero
-                            or abs {{PE.refl}} (inr (inl (($ suc (suc (suc (suc zero)))) , ($ suc (suc (suc zero)))))) -- identity
-                          or abs {{PE.refl}} (inr (inl (($ suc (suc (suc zero))) , ($ suc (suc zero)))))
+                                or abs {{PE.refl}} (inr (inl (abs {{PE.refl}} (inl (abs {{PE.refl}} (inr ($ suc (suc zero))))) ,
+                                                              abs {{PE.refl}} (inl (abs {{PE.refl}} (inr ($ zero))))))) -- identity
+                              or abs {{PE.refl}} (inr (inl (abs {{PE.refl}} (inl (abs {{PE.refl}} (inr ($ suc zero)))) ,
+                                                            abs {{PE.refl}} (inr ($ zero))))) -- identity
+                          or Expr.case rep {tx = exprTy'} {{PE.refl}} ($ suc zero) -- Pattern match on second to check whether constant (first not constant)
+                            of Expr.case rep {tx = natTy'} {{PE.refl}} ($ zero) -- Check whether zero
+                              of abs {{PE.refl}} (inl (abs {{PE.refl}} (inl true))) -- return zero
+                              or abs {{PE.refl}} (inr (inl (abs {{PE.refl}} (inr ($ suc (suc zero))) ,
+                                                            abs {{PE.refl}} (inl (abs {{PE.refl}} (inr ($ zero))))))) -- identity
+                            or abs {{PE.refl}} (inr (inl (abs {{PE.refl}} (inr ($ suc zero)) , abs {{PE.refl}} (inr ($ zero))))) -- identity
                   or Expr.case $_ zero {{PE.refl}}
                   of abs {{PE.refl}} (inr (inr (inl (rec (Expr.fst ($_ zero {{PE.refl}}) :: []) ,
                                                       rec (Expr.snd ($_ zero {{PE.refl}}) :: [])))))
@@ -402,15 +406,16 @@ module ConcreteTest where
              Delays.run 1000 (simpleExprSem ((seExprPlus (seExprVar (+ 1)) (seExprTimes (seExprCst seNatZero) (seExprVar (+ 0)))) :: []))
   test2 = PE.refl
 
+  test3 : just (seExprPlus (seExprVar (+ 1)) (seExprTimes (seExprCst (seNatSuc seNatZero)) (seExprVar (+ 0)))) PE.==
+            Delays.run 1000 (simpleExprSem ((seExprPlus (seExprVar (+ 1)) (seExprTimes (seExprCst (seNatSuc seNatZero)) (seExprVar (+ 0)))) :: []))
+  test3 = PE.refl
+
 module Abstract (depth : Nat) where
   open AbstractOps depth public
   open Semantics (\ i -> AbstractSemanticOps {Delay i}) public
 
   [[_]]# : forall {ft} (f : FunDef ft) {i} -> [[ ft ]]ft i
   [[ << rhs >> ]]# args = [[ rhs ]]e args \ args -> later \ { .InfDelay.force -> [[ << rhs >> ]]# args }
-  -- [[ << rhs >> ]]# {i} args = [[ rhs ]]e args (\ args -> later \ { .InfDelay.force -> [[ << rhs >> ]] args})
-  --[[_]]# : forall {i} {m} {D : FunCtx m} -> Prog D -> Delay i [[ D ]]D
-  --[[ P ]]# = {!!}
 
 module AbstractTest where
   open Abstract 2
@@ -418,24 +423,22 @@ module AbstractTest where
   simpleExprSem : [[ Example.simpleExpr-sig ]]ft _
   simpleExprSem = [[ Example.simpleExpr ]]#
 
-{-
   test1 : just (in-f#
-                 (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                 (in-f# ((\ x -> true) , in-f# ((\ x -> true) , in-bot)) ,
                   (in-f#
-                   (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                   (in-f# ((\ x -> false) , in-f# ((\ x -> true) , in-bot)) ,
                     (in-bot , in-bot) , (in-bot , in-bot) , sgntop)
                    ,
                    in-f#
-                   (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                   (in-f# ((\ x -> false) , in-f# ((\ x -> true) , in-bot)) ,
                     (in-bot , in-bot) , (in-bot , in-bot) , sgntop))
                   ,
                   (in-f#
-                   (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                   (in-f# ((\ x -> true) , in-f# ((\ x -> true) , in-bot)) ,
                     (in-bot , in-bot) , (in-bot , in-bot) , sgntop)
                    ,
                    in-f#
-                   (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                   (in-f# ((\ x -> true) , in-f# ((\ x -> true) , in-bot)) ,
                     (in-bot , in-bot) , (in-bot , in-bot) , sgntop))
                   , sgntop)) PE.== Delays.run 10 (simpleExprSem (IsLattice.top (TypeLattice {Example.exprTy}) :: []))
   test1 = PE.refl
--}
