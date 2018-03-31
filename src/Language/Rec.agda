@@ -3,7 +3,7 @@ module Language.Rec where
 open import Data.Nat renaming (ℕ to Nat; _+_ to _+N_; _*_ to _*N_)
 open import Data.Integer renaming (ℤ to Integer; _+_ to _+Z_; _*_ to _*Z_; _-_ to _-Z_; suc to isuc)
 open import Data.List renaming (_∷_ to _::_)
-open import Data.Vec renaming (_∷_ to _::_)
+open import Data.Vec as Vec renaming (_∷_ to _::_)
 open import Data.Fin renaming (_+_ to _+F_; _-_ to _-F_; _≤_ to _<=F_; _≤?_ to _<=F?_; fromℕ to fromNat)
 
 open import Relation.Nullary
@@ -43,9 +43,6 @@ open FunType
 Ctx : Nat -> Set
 Ctx n = Vec Type n
 
-FunCtx : Nat -> Set
-FunCtx n = Vec FunType n
-
 data BinaryOp (A : Set) : Set where
   _+_ _-_ _*_ : A -> A -> BinaryOp A
 
@@ -57,33 +54,31 @@ data BoolOp (A : Set) : Set where
   not : A -> BoolOp A
 
 mutual
-  data Expr {n m : Nat} (G : Ctx n) (D : FunCtx m) : Type -> Set where
-    const : Integer -> Expr G D Int
-    $_ : forall {t} (x : Fin n) {{tc : t == lookup x G}} -> Expr G D t
-    [_]2 : BinaryOp (Expr G D Int) -> Expr G D Int
-    [_]l : LogicOp (Expr G D Int) -> Expr G D Bool
-    [_]b : BoolOp (Expr G D Bool) -> Expr G D Bool
-    true : Expr G D Bool
-    false : Expr G D Bool
-    lett_inn_ : forall {t1 t2} -> Expr G D t1 -> Expr (t1 :: G) D t2 -> Expr G D t2
-    if_then_else_ : forall {t} -> Expr G D Bool -> Expr G D t -> Expr G D t -> Expr G D t
-    _!_ : forall {ft} (f : Fin m) {{ftc : ft == lookup f D}} -> Exprs G D (argtys ft) -> Expr G D (returnty ft)
-    _,_ : forall {t1 t2} -> Expr G D t1 -> Expr G D t2 -> Expr G D (t1 *t t2)
-    fst : forall {t1 t2} -> Expr G D (t1 *t t2) -> Expr G D t1
-    snd : forall {t1 t2} -> Expr G D (t1 *t t2) -> Expr G D t2
-    inl : forall {t1 t2} -> Expr G D t1 -> Expr G D (t1 +t t2)
-    inr : forall {t1 t2} -> Expr G D t2 -> Expr G D (t1 +t t2)
-    case_of_or_ : forall {t1 t2 tr} -> Expr G D (t1 +t t2) -> Expr (t1 :: G) D tr -> Expr (t2 :: G) D tr -> Expr G D tr
-    abs : forall {tx tr} {{tc : tr == tx < Rec tx >}} -> Expr G D tr -> Expr G D (Rec tx)
-    rep : forall {tx tr} {{tc : tr == tx < Rec tx >}} -> Expr G D (Rec tx) -> Expr G D tr
+  data Expr {n : Nat} (G : Ctx n) (ft : FunType) : Type -> Set where
+    const : Integer -> Expr G ft Int
+    $_ : forall {t} (x : Fin n) {{tc : t == Vec.lookup x G}} -> Expr G ft t
+    [_]2 : BinaryOp (Expr G ft Int) -> Expr G ft Int
+    [_]l : LogicOp (Expr G ft Int) -> Expr G ft Bool
+    [_]b : BoolOp (Expr G ft Bool) -> Expr G ft Bool
+    true : Expr G ft Bool
+    false : Expr G ft Bool
+    lett_inn_ : forall {t1 t2} -> Expr G ft t1 -> Expr (t1 :: G) ft t2 -> Expr G ft t2
+    if_then_else_ : forall {t} -> Expr G ft Bool -> Expr G ft t -> Expr G ft t -> Expr G ft t
+    rec : Exprs G ft (argtys ft) -> Expr G ft (returnty ft)
+    _,_ : forall {t1 t2} -> Expr G ft t1 -> Expr G ft t2 -> Expr G ft (t1 *t t2)
+    fst : forall {t1 t2} -> Expr G ft (t1 *t t2) -> Expr G ft t1
+    snd : forall {t1 t2} -> Expr G ft (t1 *t t2) -> Expr G ft t2
+    inl : forall {t1 t2} -> Expr G ft t1 -> Expr G ft (t1 +t t2)
+    inr : forall {t1 t2} -> Expr G ft t2 -> Expr G ft (t1 +t t2)
+    case_of_or_ : forall {t1 t2 tr} -> Expr G ft (t1 +t t2) -> Expr (t1 :: G) ft tr -> Expr (t2 :: G) ft tr -> Expr G ft tr
+    abs : forall {tx tr} {{tc : tr == tx < Rec tx >}} -> Expr G ft tr -> Expr G ft (Rec tx)
+    rep : forall {tx tr} {{tc : tr == tx < Rec tx >}} -> Expr G ft (Rec tx) -> Expr G ft tr
 
-  data Exprs {n m : Nat} (G : Ctx n) (D : FunCtx m) : List Type -> Set where
-    [] : Exprs G D []
-    _::_ : forall {t ts} -> Expr G D t -> Exprs G D ts -> Exprs G D (t :: ts)
+  data Exprs {n : Nat} (G : Ctx n) (ft : FunType) : List Type -> Set where
+    [] : Exprs G ft []
+    _::_ : forall {t ts} -> Expr G ft t -> Exprs G ft ts -> Exprs G ft (t :: ts)
 
-  data ProgDef {m} (D : FunCtx m) : {n : Nat} -> FunCtx n -> Set where
-    [] : ProgDef D []
-    _::_ : forall {n} {ft} {fts : FunCtx n} -> Expr (fromList (argtys ft)) D (returnty ft) -> ProgDef D fts -> ProgDef D (ft :: fts)
-
-  Prog : {n : Nat} -> FunCtx n -> Set
-  Prog D = ProgDef D D
+  record FunDef (ft : FunType) : Set where
+    constructor <<_>>
+    field
+      rhs : Expr (fromList (argtys ft)) ft (returnty ft)

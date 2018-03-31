@@ -10,6 +10,7 @@ open import Relation.Binary.PropositionalEquality as P
 open import Relation.Binary.HeterogeneousEquality as H
 open import Size
 open import Category.Monad
+open import Category.Applicative
 open import Data.Vec using (Vec; _++_; _∷_)
 open import Data.Maybe
 
@@ -58,7 +59,7 @@ module Delays where
     unroll (now x) = now x
     unroll (later x) = force x
 
-  run : forall {A} (n : ℕ) -> Delay ∞ A -> Maybe A
+  run : forall {A} (n : ℕ) -> Delay _ A -> Maybe A
   run n (now x) = just x
   run zero (later x) = nothing
   run (suc n) (later x) = run n (force x)
@@ -66,6 +67,10 @@ module Delays where
 instance
   delayMonad : forall {i} -> RawMonad (Delay i)
   delayMonad = record { return = now ; _>>=_ = Delays._>>=_ }
+
+  delayApplicative : forall {i} -> RawApplicative (Delay i)
+  delayApplicative = record { pure = now ;
+    _⊛_ = \ af ax -> af Delays.>>= (\ f -> ax Delays.>>= (\ x -> now (f x)) ) }
 
 ::-inj1 : forall {al} {n} {m} {A : Set al} {x y : A} {xs : Vec A n} {ys : Vec A m} -> (x ∷ xs) ≅ (y ∷ ys) -> x ≅ y
 ::-inj1 refl = refl
