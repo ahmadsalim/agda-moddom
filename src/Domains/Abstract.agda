@@ -8,7 +8,7 @@ open import Data.Empty renaming (⊥ to Empty; ⊥-elim to magic)
 open import Data.Integer renaming (ℤ to Integer)
 open import Relation.Binary.PropositionalEquality as P renaming (_≡_ to _==_)
 open import Relation.Nullary
-import Relation.Nullary.Decidable as Dec renaming (map′ to map')
+import Relation.Nullary.Decidable as Dec renaming (map′ to map'; ⌊_⌋ to toBool)
 open import Category.Monad
 open import Coinduction renaming (♯_ to delay; ∞ to Inf; ♭ to force)
 import Data.Nat as Nat renaming (ℕ to Nat)
@@ -387,99 +387,98 @@ instance
           Prod<=? (a1 , b1) (a2 , b2) | no contra = no (\ { (a1<=a2 , b1<=b2) -> contra a1<=a2 })
 
 -- How to enforce invariants as first class instead of relying on module system
-abstract
-  record _*O*_ {al} {bl} (A : Set al) (B : Set bl) : Set (al Level.lub bl) where
-    constructor _,_
-    field
-      proj1 : A
-      proj2 : B
-
+--abstract
+record _*O*_ {al} {bl} (A : Set al) (B : Set bl) : Set (al Level.lub bl) where
+  constructor _,_
+  field
+    proj1 : A
+    proj2 : B
 open _*O*_
 
 module _ {al} {bl} {A : Set al} {B : Set bl} {{LA : IsLattice A}} {{LB : IsLattice B}} where
   open IsLattice {{...}}
 
-  abstract
-    *O*-bot : A *O* B
-    *O*-bot = bot , bot
+  -- abstract
+  *O*-bot : A *O* B
+  *O*-bot = bot , bot
 
-    _,,_ : A -> B -> A *O* B
-    _,,_ a b with (is-bot a)
-    _,,_ a b | yes p = *O*-bot
-    _,,_ a b | no _ with (is-bot b)
-    _,,_ a b | no _ | yes p = *O*-bot
-    _,,_ a b | no notbota | no notbotb = a , b
+  _,,_ : A -> B -> A *O* B
+  _,,_ a b with (is-bot a)
+  _,,_ a b | yes p = *O*-bot
+  _,,_ a b | no _ with (is-bot b)
+  _,,_ a b | no _ | yes p = *O*-bot
+  _,,_ a b | no notbota | no notbotb = a , b
 
-    fst : A *O* B -> A
-    fst (a , b) = a
+  fst : A *O* B -> A
+  fst (a , b) = a
 
-    snd : A *O* B -> B
-    snd (a , b) = b
+  snd : A *O* B -> B
+  snd (a , b) = b
 
-    fst-red : forall {a b} (anotbot : (a <= bot) -> Empty) (bnotbot : (b <= bot) -> Empty) -> fst (a ,, b) == a
-    fst-red {a} {b} anotbot bnotbot with (is-bot a)
-    fst-red {a} {b} anotbot bnotbot | yes p = magic (anotbot p)
-    fst-red {a} {b} anotbot bnotbot | no _ with (is-bot b)
-    fst-red {a} {b} anotbot bnotbot | no _ | yes p = magic (bnotbot p)
-    fst-red {a} {b} anotbot bnotbot | no _ | no _ = refl
+  fst-red : forall {a b} (anotbot : (a <= bot) -> Empty) (bnotbot : (b <= bot) -> Empty) -> fst (a ,, b) == a
+  fst-red {a} {b} anotbot bnotbot with (is-bot a)
+  fst-red {a} {b} anotbot bnotbot | yes p = magic (anotbot p)
+  fst-red {a} {b} anotbot bnotbot | no _ with (is-bot b)
+  fst-red {a} {b} anotbot bnotbot | no _ | yes p = magic (bnotbot p)
+  fst-red {a} {b} anotbot bnotbot | no _ | no _ = refl
 
-    snd-red : forall {a b} (anotbot : (a <= bot) -> Empty) (bnotbot : (b <= bot) -> Empty) -> snd (a ,, b) == b
-    snd-red {a} {b} anotbot bnotbot with (is-bot a)
-    snd-red {a} {b} anotbot bnotbot | yes p = magic (anotbot p)
-    snd-red {a} {b} anotbot bnotbot | no _ with (is-bot b)
-    snd-red {a} {b} anotbot bnotbot | no _ | yes p = magic (bnotbot p)
-    snd-red {a} {b} anotbot bnotbot | no _ | no _ = refl
+  snd-red : forall {a b} (anotbot : (a <= bot) -> Empty) (bnotbot : (b <= bot) -> Empty) -> snd (a ,, b) == b
+  snd-red {a} {b} anotbot bnotbot with (is-bot a)
+  snd-red {a} {b} anotbot bnotbot | yes p = magic (anotbot p)
+  snd-red {a} {b} anotbot bnotbot | no _ with (is-bot b)
+  snd-red {a} {b} anotbot bnotbot | no _ | yes p = magic (bnotbot p)
+  snd-red {a} {b} anotbot bnotbot | no _ | no _ = refl
 
-    fst-bot : forall {a b} (aorbbot : Either (a <= bot) (b <= bot)) -> fst (a ,, b) == bot
-    fst-bot {a} {b} aorbbot with (is-bot a)
-    fst-bot {a} {b} aorbbot | yes _ = refl
-    fst-bot {a} {b} (inj1 abot) | no anotbot = magic (anotbot abot)
-    fst-bot {a} {b} (inj2 bbot) | no anotbot with (is-bot b)
-    fst-bot {a} {b} (inj2 bbot) | no anotbot | yes _ = refl
-    fst-bot {a} {b} (inj2 bbot) | no anotbot | no bnotbot = magic (bnotbot bbot)
+  fst-bot : forall {a b} (aorbbot : Either (a <= bot) (b <= bot)) -> fst (a ,, b) == bot
+  fst-bot {a} {b} aorbbot with (is-bot a)
+  fst-bot {a} {b} aorbbot | yes _ = refl
+  fst-bot {a} {b} (inj1 abot) | no anotbot = magic (anotbot abot)
+  fst-bot {a} {b} (inj2 bbot) | no anotbot with (is-bot b)
+  fst-bot {a} {b} (inj2 bbot) | no anotbot | yes _ = refl
+  fst-bot {a} {b} (inj2 bbot) | no anotbot | no bnotbot = magic (bnotbot bbot)
 
-    snd-bot : forall {a b} (aorbbot : Either (a <= bot) (b <= bot)) -> snd (a ,, b) == bot
-    snd-bot {a} {b} aorbbot with (is-bot a)
-    snd-bot {a} {b} aorbbot | yes _ = refl
-    snd-bot {a} {b} (inj1 abot) | no anotbot = magic (anotbot abot)
-    snd-bot {a} {b} (inj2 bbot) | no anotbot with (is-bot b)
-    snd-bot {a} {b} (inj2 bbot) | no anotbot | yes _ = refl
-    snd-bot {a} {b} (inj2 bbot) | no anotbot | no bnotbot = magic (bnotbot bbot)
+  snd-bot : forall {a b} (aorbbot : Either (a <= bot) (b <= bot)) -> snd (a ,, b) == bot
+  snd-bot {a} {b} aorbbot with (is-bot a)
+  snd-bot {a} {b} aorbbot | yes _ = refl
+  snd-bot {a} {b} (inj1 abot) | no anotbot = magic (anotbot abot)
+  snd-bot {a} {b} (inj2 bbot) | no anotbot with (is-bot b)
+  snd-bot {a} {b} (inj2 bbot) | no anotbot | yes _ = refl
+  snd-bot {a} {b} (inj2 bbot) | no anotbot | no bnotbot = magic (bnotbot bbot)
 
-    instance
-      CoalescedProdLat : IsLattice (A *O* B)
-      CoalescedProdLat = record
-                        { _<=_ = CoalescedProd<=
-                        ; _glb_ = \ ab1 ab2 -> (proj1 ab1 glb proj1 ab2) ,, (proj2 ab1 glb proj2 ab2)
-                        ; _lub_ = \ ab1 ab2 -> (proj1 ab1 lub proj1 ab2) ,, (proj2 ab1 lub proj2 ab2)
-                        ; bot = *O*-bot
-                        ; top = top ,, top
-                        ; <=-reflexive = CoalescedProd<=-reflexive
-                        ; is-bot = CoalescedProd-is-bot
-                        }
-        where
-          CoalescedProd<= : A *O* B -> A *O* B -> Set
-          CoalescedProd<= (a1 , b1) (a2 , b2) = a1 <= a2 ** b1 <= b2
+  instance
+    CoalescedProdLat : IsLattice (A *O* B)
+    CoalescedProdLat = record
+                      { _<=_ = CoalescedProd<=
+                      ; _glb_ = \ ab1 ab2 -> (proj1 ab1 glb proj1 ab2) ,, (proj2 ab1 glb proj2 ab2)
+                      ; _lub_ = \ ab1 ab2 -> (proj1 ab1 lub proj1 ab2) ,, (proj2 ab1 lub proj2 ab2)
+                      ; bot = *O*-bot
+                      ; top = top ,, top
+                      ; <=-reflexive = CoalescedProd<=-reflexive
+                      ; is-bot = CoalescedProd-is-bot
+                      }
+      where
+        CoalescedProd<= : A *O* B -> A *O* B -> Set
+        CoalescedProd<= (a1 , b1) (a2 , b2) = a1 <= a2 ** b1 <= b2
 
-          CoalescedProd<=-reflexive : (ab : A *O* B) → CoalescedProd<= ab ab
-          CoalescedProd<=-reflexive (a , b) = <=-reflexive a , <=-reflexive b
+        CoalescedProd<=-reflexive : (ab : A *O* B) → CoalescedProd<= ab ab
+        CoalescedProd<=-reflexive (a , b) = <=-reflexive a , <=-reflexive b
 
-          CoalescedProd-is-bot : (ab : A *O* B) → Dec (CoalescedProd<= ab *O*-bot)
-          CoalescedProd-is-bot ab with is-bot (proj1 ab) | is-bot (proj2 ab)
-          CoalescedProd-is-bot ab | yes p | yes p2 = yes (p , p2)
-          CoalescedProd-is-bot ab | yes p | no contra = no (\ z -> contra (proj2 z))
-          CoalescedProd-is-bot ab | no contra | p2 = no (\ z -> contra (proj1 z))
+        CoalescedProd-is-bot : (ab : A *O* B) → Dec (CoalescedProd<= ab *O*-bot)
+        CoalescedProd-is-bot ab with is-bot (proj1 ab) | is-bot (proj2 ab)
+        CoalescedProd-is-bot ab | yes p | yes p2 = yes (p , p2)
+        CoalescedProd-is-bot ab | yes p | no contra = no (\ z -> contra (proj2 z))
+        CoalescedProd-is-bot ab | no contra | p2 = no (\ z -> contra (proj1 z))
 
-    instance
-      CoalescedProdDecLat : {{DLA : IsDecLattice A}} {{DLB : IsDecLattice B}} -> IsDecLattice (A *O* B)
-      CoalescedProdDecLat = record { _<=?_ = CProd<=? }
-        where open IsDecLattice {{...}}
-              CProd<=? : (ab1 ab2 : A *O* B) -> Dec (IsLattice._<=_ CoalescedProdLat ab1 ab2)
-              CProd<=? (a1 , b1) (a2 , b2) with (a1 <=? a2)
-              CProd<=? (a1 , b1) (a2 , b2) | yes a1<=a2 with (b1 <=? b2)
-              CProd<=? (a1 , b1) (a2 , b2) | yes a1<=a2 | yes b1<=b2 = yes (a1<=a2 , b1<=b2)
-              CProd<=? (a1 , b1) (a2 , b2) | yes a1<=a2 | no contra = no (\ { (a1<=a2 , b1<=b2) -> contra b1<=b2 })
-              CProd<=? (a1 , b1) (a2 , b2) | no contra = no (\ { (a1<=a2 , b1<=b2) -> contra a1<=a2 })
+  instance
+    CoalescedProdDecLat : {{DLA : IsDecLattice A}} {{DLB : IsDecLattice B}} -> IsDecLattice (A *O* B)
+    CoalescedProdDecLat = record { _<=?_ = CProd<=? }
+      where open IsDecLattice {{...}}
+            CProd<=? : (ab1 ab2 : A *O* B) -> Dec (IsLattice._<=_ CoalescedProdLat ab1 ab2)
+            CProd<=? (a1 , b1) (a2 , b2) with (a1 <=? a2)
+            CProd<=? (a1 , b1) (a2 , b2) | yes a1<=a2 with (b1 <=? b2)
+            CProd<=? (a1 , b1) (a2 , b2) | yes a1<=a2 | yes b1<=b2 = yes (a1<=a2 , b1<=b2)
+            CProd<=? (a1 , b1) (a2 , b2) | yes a1<=a2 | no contra = no (\ { (a1<=a2 , b1<=b2) -> contra b1<=b2 })
+            CProd<=? (a1 , b1) (a2 , b2) | no contra = no (\ { (a1<=a2 , b1<=b2) -> contra a1<=a2 })
 
 {-# NO_POSITIVITY_CHECK #-}
 data Fix# {fl} (F# : Set fl -> Set fl) : Nat.Nat -> Set fl where

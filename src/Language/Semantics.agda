@@ -358,10 +358,14 @@ module Example where
 
 module Concrete where
   open ConcreteOps
-  open Fixing
-  open Semantics (\ i -> ConcreteSemanticOps {Delay i})
+  open Semantics (\ i -> ConcreteSemanticOps {Delay i}) public
+
   [[_]] : forall {ft} (f : FunDef ft) {i} -> [[ ft ]]ft i
-  [[ << rhs >> ]] {i} args = [[ rhs ]]e args (\ args -> later \ { .InfDelay.force -> [[ << rhs >> ]] args})
+  [[ << rhs >> ]] args = [[ rhs ]]e args (\ args -> later \ { .InfDelay.force -> [[ << rhs >> ]] args})
+
+
+module ConcreteTest where
+  open Concrete
 
   simpleExprSem : [[ Example.simpleExpr-sig ]]ft _
   simpleExprSem = [[ Example.simpleExpr ]]
@@ -399,8 +403,39 @@ module Concrete where
   test2 = PE.refl
 
 module Abstract (depth : Nat) where
-  open AbstractOps depth
-  -- open Semantics AbstractSemanticOps
+  open AbstractOps depth public
+  open Semantics (\ i -> AbstractSemanticOps {Delay i}) public
 
+  [[_]]# : forall {ft} (f : FunDef ft) {i} -> [[ ft ]]ft i
+  [[ << rhs >> ]]# args = [[ rhs ]]e args \ args -> later \ { .InfDelay.force -> [[ << rhs >> ]]# args }
+  -- [[ << rhs >> ]]# {i} args = [[ rhs ]]e args (\ args -> later \ { .InfDelay.force -> [[ << rhs >> ]] args})
   --[[_]]# : forall {i} {m} {D : FunCtx m} -> Prog D -> Delay i [[ D ]]D
   --[[ P ]]# = {!!}
+
+module AbstractTest where
+  open Abstract 2
+
+  simpleExprSem : [[ Example.simpleExpr-sig ]]ft _
+  simpleExprSem = [[ Example.simpleExpr ]]#
+
+{-
+  test1 : just (in-f#
+                 (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                  (in-f#
+                   (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                    (in-bot , in-bot) , (in-bot , in-bot) , sgntop)
+                   ,
+                   in-f#
+                   (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                    (in-bot , in-bot) , (in-bot , in-bot) , sgntop))
+                  ,
+                  (in-f#
+                   (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                    (in-bot , in-bot) , (in-bot , in-bot) , sgntop)
+                   ,
+                   in-f#
+                   (in-f# ((λ x → true) , in-f# ((λ x → true) , in-bot)) ,
+                    (in-bot , in-bot) , (in-bot , in-bot) , sgntop))
+                  , sgntop)) PE.== Delays.run 10 (simpleExprSem (IsLattice.top (TypeLattice {Example.exprTy}) :: []))
+  test1 = PE.refl
+-}
