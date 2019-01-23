@@ -231,7 +231,7 @@ module AbstractOps (depth : Nat) where
                                                                       (\ {A} {B} {{LA}} {{LB}} -> tmap {A} {B} {{LA}} {{LB}} t)) <$$>_) nv)
                                                   })
           repv : forall {t} -> [[ Rec t ]]t -> [[ t < Rec t > ]]t
-          repv {t} in-bot = IsLattice.bot (TypeLattice {t < Rec t >})
+          repv {t} in-bot = IsLattice.top (TypeLattice {t < Rec t >})
           repv {t} (in-f# x) = from (SynSemSub t (Rec t)) <$$>
                                  tmap {{Fix#-Lat {{TypeLattice' {t}}}}} {{Fix#-Lat {{TypeLattice' {t}}}}} t
                                       (to (FixEquiv {{TypeLattice' {t}}} (\ {A} {B} {{LA}} {{LB}} -> tmap {A} {B} {{LA}} {{LB}} t)) <$$>_) x

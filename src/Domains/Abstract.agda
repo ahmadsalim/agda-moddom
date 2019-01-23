@@ -10,7 +10,7 @@ open import Relation.Binary.PropositionalEquality as P renaming (_≡_ to _==_)
 open import Relation.Nullary
 import Relation.Nullary.Decidable as Dec renaming (map′ to map'; ⌊_⌋ to toBool)
 open import Category.Monad
-open import Coinduction renaming (♯_ to delay; ∞ to Inf; ♭ to force)
+open import Codata.Musical.Notation renaming (♯_ to delay; ∞ to Inf; ♭ to force)
 import Data.Nat as Nat renaming (ℕ to Nat)
 import Level renaming (_⊔_ to _lub_)
 open import Category.Functor
