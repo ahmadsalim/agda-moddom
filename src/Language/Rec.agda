@@ -56,7 +56,7 @@ data BoolOp (A : Set) : Set where
 mutual
   data Expr {n : Nat} (G : Ctx n) (ft : FunType) : Type -> Set where
     const : Integer -> Expr G ft Int
-    $_ : forall {t} (x : Fin n) {{tc : t == Vec.lookup x G}} -> Expr G ft t
+    $_ : forall {t} (x : Fin n) {{tc : t == Vec.lookup G x}} -> Expr G ft t
     [_]2 : BinaryOp (Expr G ft Int) -> Expr G ft Int
     [_]l : LogicOp (Expr G ft Int) -> Expr G ft Bool
     [_]b : BoolOp (Expr G ft Bool) -> Expr G ft Bool

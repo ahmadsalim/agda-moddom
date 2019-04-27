@@ -12,7 +12,7 @@ open import Size
 open import Category.Monad
 open import Category.Applicative
 open import Data.Vec using (Vec; _++_; _∷_)
-open import Data.Maybe
+open import Data.Maybe hiding (_>>=_)
 
 weakenF : ∀ {n} → Fin n → Fin (suc n)
 weakenF zero = zero

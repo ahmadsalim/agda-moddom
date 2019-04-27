@@ -486,7 +486,7 @@ data Fix# {fl} (F# : Set fl -> Set fl) : Nat.Nat -> Set fl where
   in-f# : forall {n} -> F# (Fix# F# n) -> Fix# F# (Nat.suc n)
 
 instance
-  Fix#-Lat : forall {fl n} {F# : Set fl -> Set fl} {{LF# : forall {X#} -> IsLattice X# -> IsLattice (F# X#)}} -> IsLattice (Fix# F# n)
+  Fix#-Lat : forall {fl n} {F# : Set fl -> Set fl} {{LF# : forall {X#} -> {{LX# : IsLattice X#}} -> IsLattice (F# X#)}} -> IsLattice (Fix# F# n)
   Fix#-Lat {fl} {Nat.zero} {F#} {{LF#}} = record
                                         { _<=_ = \ _ _ -> Unit
                                         ; _glb_ = \ _ _ -> in-bot
@@ -505,7 +505,7 @@ instance
                                         ; <=-reflexive = Fix#<=-reflexive
                                         ; is-bot = Fix#-is-bot
                                         }
-    where module LF# = IsLattice (LF# (Fix#-Lat {n = n} {F# = F#} {{LF#}}))
+    where module LF# = IsLattice (LF# {{Fix#-Lat {n = n} {F# = F#} {{LF#}}}})
           Fix#<= : Fix# F# (Nat.suc n) -> Fix# F# (Nat.suc n) -> Set
           Fix#<= (in-f# f#1) (in-f# f#2) = f#1 LF#.<= f#2
 
@@ -516,21 +516,21 @@ instance
           Fix#-is-bot (in-f# f#) = LF#.is-bot f#
 
   Fix#-DecLat : forall {fl n} {F# : Set fl -> Set fl}
-                       {{LF# : forall {X#} -> IsLattice X# -> IsLattice (F# X#)}}
-                       {{DLF# : forall {X#} {{LX : IsLattice X#}} -> IsDecLattice X# -> IsDecLattice (F# X#) {{LF# LX}} }}
+                       {{LF# : forall {X#} -> {{LX# : IsLattice X#}} -> IsLattice (F# X#)}}
+                       {{DLF# : forall {X#} {{LX# : IsLattice X#}} -> {{DLX# : IsDecLattice X#}} -> IsDecLattice (F# X#) {{LF# {{LX#}}}} }}
                        -> IsDecLattice (Fix# F# n) {{Fix#-Lat {{LF#}}}}
   Fix#-DecLat {fl} {Nat.zero} {F#} {{LF#}} {{DF#}} = record { _<=?_ = \ _ _ -> yes tt }
   Fix#-DecLat {fl} {Nat.suc n} {F#} {{LF#}} {{DF#}} = record
                                                             { _<=?_ = \ { (in-f# f#1) (in-f# f#2) -> f#1 DF#.<=? f#2 } }
-    where module DF# = IsDecLattice (DF# (Fix#-DecLat {n = n} {F# = F#} {{LF#}} {{DF#}}))
+    where module DF# = IsDecLattice (DF# {{_}} {{Fix#-DecLat {n = n} {F# = F#} {{LF#}} {{DF#}}}})
 
-FixEquiv : forall {fl} {n} {F# : Set fl -> Set fl} {{LF# : forall {X#} -> IsLattice X# -> IsLattice (F# X#)}}
+FixEquiv : forall {fl} {n} {F# : Set fl -> Set fl} {{LF# : forall {X#} -> {{LX# : IsLattice X#}} -> IsLattice (F# X#)}}
           (fmap : forall {A : Set fl} {B : Set fl} {{LA : IsLattice A}} {{LB : IsLattice B}} (f : A -> B) -> F# A -> F# B)
           -> Equiv (Fix# F# n) (Fix# F# (Nat.suc n))
 FixEquiv {fl} {Nat.zero} {F#} {{LF#}} fmap = equivalence (\ { in-bot -> IsLattice.bot (Fix#-Lat {{LF#}}) }) (\ _ → in-bot)
 FixEquiv {fl} {Nat.suc n} {F#} {{LF#}} fmap =
-  equivalence (\ { (in-f# x) -> in-f# (fmap (\ y -> to (FixEquiv {{LF#}} fmap) <$> y) x) })
-              (\ { (in-f# x) -> in-f# (fmap (\ y -> from (FixEquiv {{LF#}} fmap) <$> y) x) })
+  equivalence (\ { (in-f# x) -> in-f# (fmap {{flat}} {{flat}} (\ y -> to (FixEquiv {{LF#}} fmap) <$> y) x) })
+              (\ { (in-f# x) -> in-f# (fmap {{flat}} {{flat}} (\ y -> from (FixEquiv {{LF#}} fmap) <$> y) x) })
   where instance flat : forall {n} -> IsLattice (Fix# F# n)
                  flat = Fix#-Lat {{LF#}}
         open Equivalence

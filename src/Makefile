@@ -1,2 +1,3 @@
+AGDA=agda
 check:
-	agda Language/Semantics.agda
+	$(AGDA) Language/Semantics.agda

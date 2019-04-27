@@ -5,7 +5,7 @@ open import Data.Integer renaming (ℤ to Integer; _+_ to _+Z_; _*_ to _*Z_; _-_
                                    _≤?_ to _<=?Z_; _≟_ to _~?Z_)
 open import Data.Nat renaming (ℕ to Nat)
 open import Data.Fin
-open import Data.Maybe
+open import Data.Maybe hiding (_>>=_)
 open import Data.Unit renaming (⊤ to Unit)
 open import Data.Bool as B2 renaming (Bool to B2)
 open import Data.Empty renaming (⊥ to Empty; ⊥-elim to magic)
@@ -150,7 +150,7 @@ module AbstractOps (depth : Nat) where
       TypeLattice {Bool} = BoolLat
       TypeLattice {t *t s} = CoalescedProdLat
       TypeLattice {t +t s} = ProdLat
-      TypeLattice {Rec t} = Fix#-Lat {{TypeLattice' {t}}}
+      TypeLattice {Rec t} = Fix#-Lat {{\{{LA}} -> TypeLattice' {t} LA}}
 
   tmap : forall {A B : Set} {{LA : IsLattice A}} {{LB : IsLattice B}} t -> (f : A -> B) → [[ t ]]t' A → [[ t ]]t' B
   tmap (Const t) f v = v
@@ -179,7 +179,7 @@ module AbstractOps (depth : Nat) where
       TypeDecLattice {Bool} = BoolDecLat
       TypeDecLattice {t *t s} = CoalescedProdDecLat
       TypeDecLattice {t +t s} = ProdDecLat
-      TypeDecLattice {Rec t} = Fix#-DecLat {{TypeLattice' {t}}} {{\ {X#} {{LX#}} DLX# -> TypeDecLattice' {{LX#}} {{DLX#}} {t}}}
+      TypeDecLattice {Rec t} = Fix#-DecLat {{\{{LX#}} -> TypeLattice' {t} LX#}} {{\ {X#} {{LX#}} {{DLX#}} -> TypeDecLattice' {{LX#}} {{DLX#}} {t}}}
 
   SynSemSub : forall t t' -> Equiv [[ t < t' > ]]t ([[ t ]]t' [[ t' ]]t)
   SynSemSub (Const t) t' = equivalence F.id F.id
@@ -226,15 +226,15 @@ module AbstractOps (depth : Nat) where
                                                     (suc n , p) -> \ v ->
                                                       let nv : [[ t ]]t' (Fix# [[ t ]]t' (suc n))
                                                           nv = subst (\ m -> [[ t ]]t' (Fix# [[ t ]]t' m)) (P.sym p) (to (SynSemSub t (Rec t)) <$$> v)
-                                                      in in-f# (tmap {{Fix#-Lat {{TypeLattice' {t}}}}} {{Fix#-Lat {{TypeLattice' {t}}}}} t
-                                                                (from (FixEquiv {{TypeLattice' {t}}}
+                                                      in in-f# (tmap {{Fix#-Lat {{\{{LX#}} -> TypeLattice' {t} LX#}}}} {{Fix#-Lat {{\{{LX#}} -> TypeLattice' {t} LX#}}}} t
+                                                                (from (FixEquiv {{\{{LX#}} -> TypeLattice' {t} LX#}}
                                                                       (\ {A} {B} {{LA}} {{LB}} -> tmap {A} {B} {{LA}} {{LB}} t)) <$$>_) nv)
                                                   })
           repv : forall {t} -> [[ Rec t ]]t -> [[ t < Rec t > ]]t
           repv {t} in-bot = IsLattice.top (TypeLattice {t < Rec t >})
           repv {t} (in-f# x) = from (SynSemSub t (Rec t)) <$$>
-                                 tmap {{Fix#-Lat {{TypeLattice' {t}}}}} {{Fix#-Lat {{TypeLattice' {t}}}}} t
-                                      (to (FixEquiv {{TypeLattice' {t}}} (\ {A} {B} {{LA}} {{LB}} -> tmap {A} {B} {{LA}} {{LB}} t)) <$$>_) x
+                                 tmap {{Fix#-Lat {{\{{LX#}} -> TypeLattice' {t} LX#}}}} {{Fix#-Lat {{\{{LX#}} -> TypeLattice' {t} LX#}}}} t
+                                      (to (FixEquiv {{\{{LX#}} -> TypeLattice' {t} LX#}} (\ {A} {B} {{LA}} {{LB}} -> tmap {A} {B} {{LA}} {{LB}} t)) <$$>_) x
 
 module Semantics (Ops : forall i -> SemanticOps (Delay i)) where
   open FunType
